@@ -1,5 +1,8 @@
 [package]
-
-name = "wpgen"
+name = "bg_gen"
 version = "0.0.1"
 authors = [ "Boris Faure <billiob@gmail.com>" ]
+
+[dependencies]
+image = "*"
+docopt = "*"
