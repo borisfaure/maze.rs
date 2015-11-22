@@ -1,8 +1,8 @@
 use std::path::Path;
 use image::{
-    //ImageBuffer,
     RgbImage,
     Rgb,
+    imageops
 };
 use rand;
 use rand::ThreadRng;
@@ -59,7 +59,12 @@ fn draw_tile_rand(img: &mut RgbImage, x: u32, y: u32) {
     draw_tile(img, x, y, &TILES[idx]);
 }
 
-pub fn generate_image(path: &Path, width: u32, height: u32) {
+pub fn generate_image(path: &Path, orig_width: u32, orig_height: u32) {
+
+    let width = ((orig_width + TILE_SIZE -1 ) / TILE_SIZE) * TILE_SIZE;
+    let height = ((orig_height + TILE_SIZE -1 ) / TILE_SIZE) * TILE_SIZE;
+    println!("width:{} orig_width:{} height:{} orig_height:{}",
+             width, orig_width, height, orig_height);
 
     let mut img = RgbImage::new(width, height);
 
@@ -68,5 +73,15 @@ pub fn generate_image(path: &Path, width: u32, height: u32) {
             draw_tile_rand(&mut img, x*TILE_SIZE ,y*TILE_SIZE);
         }
     }
-    let _ = img.save(path);
+    let subimg;
+    let imgbuf;
+    let imgref;
+    if width != orig_width || height != orig_height {
+        subimg = imageops::crop(&mut img, 0, 0, orig_width, orig_height);
+        imgbuf = subimg.to_image();
+        imgref = &imgbuf;
+    } else {
+        imgref = &img;
+    }
+    let _ = imgref.save(path);
 }
