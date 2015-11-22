@@ -1,6 +1,11 @@
 extern crate docopt;
+extern crate image;
+extern crate rand;
 
 use docopt::Docopt;
+use std::path::Path;
+
+mod mosaic;
 
 const USAGE: &'static str = "
 Background generator.
@@ -39,12 +44,14 @@ fn main() {
     let geometry = args.get_str("--geometry");
     println!("geometry='{}'", geometry);
 
-    let file = args.get_str("FILE");
+    let path = args.get_str("FILE");
 
     let geometry = geometry_parse(&geometry);
 
-    println!("file='{}'", file);
+    println!("path='{}'", path);
     println!("geometry={:?}", geometry);
 
+    let path = Path::new(path);
     /* TODO: kind: mosaic, fall */
+    mosaic::generate_image(path, geometry.0, geometry.1);
 }
