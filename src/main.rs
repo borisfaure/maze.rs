@@ -10,17 +10,24 @@ mod mosaic;
 const USAGE: &'static str = "
 Background generator.
 
-Usage: bg_gen [options] FILE
-       bg_gen -g GEOM FILE
-       bg_gen --geometry GEOM FILE
+Usage: bg_gen mosaic FILE [options]
+       bg_gen fall FILE [options]
+       bg_gen -g GEOM <kind> FILE
+       bg_gen --geometry GEOM <kind> FILE
        bg_gen -h | --help
        bg_gen -v | --version
+
+Kinds:
+   mosaic      a random mosaic filling all the image
+   fall        a random mosaic that falls from the top of the image
 
 Options:
     -h, --help                            Show this message
     -v, --version                         Show the version
     -g=<WIDTHxHEIGHT>, --geometry=<WIDTHxHEIGHT>  Geometry of the image to generate [default: 100x100]
 ";
+
+
 
 fn geometry_parse(geometry: &str) -> (u32, u32) {
     let geometry : Vec<&str> = geometry.split('x').collect();
@@ -42,16 +49,14 @@ fn main() {
                       .and_then(|dopt| dopt.version(Some(version)).parse())
                       .unwrap_or_else(|e| e.exit());
     let geometry = args.get_str("--geometry");
-    println!("geometry='{}'", geometry);
-
-    let path = args.get_str("FILE");
-
     let geometry = geometry_parse(&geometry);
 
-    println!("path='{}'", path);
-    println!("geometry={:?}", geometry);
-
+    let path = args.get_str("FILE");
     let path = Path::new(path);
-    /* TODO: kind: mosaic, fall */
-    mosaic::generate_image(path, geometry.0, geometry.1);
+
+    if args.get_bool("mosaic") {
+        mosaic::generate_mosaic(path, geometry.0, geometry.1);
+    } else if args.get_bool("fall") {
+        mosaic::generate_falling_mosaic(path, geometry.0, geometry.1);
+    }
 }
