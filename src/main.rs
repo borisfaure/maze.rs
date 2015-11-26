@@ -6,12 +6,14 @@ use docopt::Docopt;
 use std::path::Path;
 
 mod mosaic;
+mod invaders;
 
 const USAGE: &'static str = "
 Background generator.
 
 Usage: bg_gen mosaic FILE [options]
        bg_gen fall FILE [options]
+       bg_gen invaders FILE [options]
        bg_gen -g GEOM <kind> FILE
        bg_gen --geometry GEOM <kind> FILE
        bg_gen -h | --help
@@ -58,5 +60,7 @@ fn main() {
         mosaic::generate_mosaic(path, geometry.0, geometry.1);
     } else if args.get_bool("fall") {
         mosaic::generate_falling_mosaic(path, geometry.0, geometry.1);
+    } else if args.get_bool("invaders") {
+        invaders::generate_image(path, geometry.0, geometry.1);
     }
 }
