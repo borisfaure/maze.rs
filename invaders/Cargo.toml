@@ -1,0 +1,9 @@
+[package]
+name = "invaders"
+version = "0.0.1"
+authors = [ "Boris Faure <billiob@gmail.com>" ]
+
+[dependencies]
+docopt = "*"
+rand = "*"
+image = "*"
