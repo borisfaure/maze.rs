@@ -2,6 +2,7 @@
 name = "invaders"
 version = "0.0.1"
 authors = [ "Boris Faure <billiob@gmail.com>" ]
+license = "BSD-2-Clause"
 
 [dependencies]
 docopt = "*"
