@@ -1,5 +1,5 @@
 [package]
-name = "bg_gen"
+name = "mosaic"
 version = "0.0.1"
 authors = [ "Boris Faure <billiob@gmail.com>" ]
 

@@ -1,10 +1,14 @@
+extern crate docopt;
+extern crate image;
+extern crate rand;
+
+use docopt::Docopt;
 use std::path::Path;
 use image::{
     RgbImage,
     Rgb,
     imageops
 };
-use rand;
 use rand::ThreadRng;
 use rand::distributions::{
     IndependentSample,
@@ -59,23 +63,6 @@ fn draw_tile_rand(img: &mut RgbImage, x: u32, y: u32) {
     draw_tile(img, x, y, &TILES[idx]);
 }
 
-fn draw_column_rand(img: &mut RgbImage, idx_orig: u8, x: u32, y: u32, hmax: u32) {
-    if hmax == 0 {
-        return;
-    }
-    let tiles_range : Range<u8> = Range::new(idx_orig, TILES.len() as u8);
-    let mut rng : ThreadRng = rand::thread_rng();
-    let tiles_idx = tiles_range.ind_sample(&mut rng);
-    let height_range : Range<u32> = Range::new(0, hmax);
-    let height = height_range.ind_sample(&mut rng);
-    for i in 0..height {
-       draw_tile(img, x, (y+i) * TILE_SIZE, &TILES[tiles_idx as usize]);
-    }
-    if tiles_idx+1 < (TILES.len() as u8) && height < hmax {
-        draw_column_rand(img, tiles_idx + 1, x, y + height, hmax - height);
-    }
-}
-
 fn generate_image<F>(path: &Path, orig_width: u32, orig_height: u32, draw_image: F)
 where F: Fn(&mut RgbImage, u32, u32) {
 
@@ -99,7 +86,7 @@ where F: Fn(&mut RgbImage, u32, u32) {
     let _ = imgref.save(path);
 }
 
-pub fn generate_mosaic(path: &Path, orig_width: u32, orig_height: u32) {
+fn generate_mosaic(path: &Path, orig_width: u32, orig_height: u32) {
     generate_image(path, orig_width, orig_height,
        |img: &mut RgbImage, width: u32, height: u32| {
            for y in 0..(height/TILE_SIZE) {
@@ -109,12 +96,48 @@ pub fn generate_mosaic(path: &Path, orig_width: u32, orig_height: u32) {
            }
        });
 }
-pub fn generate_falling_mosaic(path: &Path, orig_width: u32, orig_height: u32) {
-    generate_image(path, orig_width, orig_height,
-       |img: &mut RgbImage, width: u32, height: u32| {
-           let hmax : u32 = height / TILE_SIZE;
-           for x in 0..(width/TILE_SIZE) {
-               draw_column_rand(img, 0, x*TILE_SIZE, 0, hmax);
-           }
-       });
+
+const USAGE: &'static str = "
+Mosaic background generator.
+
+Usage: mosaic [options] FILE
+       mosaic -g GEOM <kind> FILE
+       mosaic --geometry GEOM <kind> FILE
+       mosaic -h | --help
+       mosaic -v | --version
+
+Options:
+    -h, --help                            Show this message
+    -v, --version                         Show the version
+    -g=<WIDTHxHEIGHT>, --geometry=<WIDTHxHEIGHT>  Geometry of the image to generate [default: 100x100]
+";
+
+
+
+fn geometry_parse(geometry: &str) -> (u32, u32) {
+    let geometry : Vec<&str> = geometry.split('x').collect();
+    if geometry.len() != 2 {
+        panic!("invalid geometry");
+    }
+    let width : u32 = geometry[0].parse()
+        .ok()
+        .expect("invalid geometry");
+    let height : u32 = geometry[1].parse()
+        .ok()
+        .expect("invalid geometry");
+    (width, height)
+}
+
+fn main() {
+    let version = "0.0.1".to_owned();
+    let args = Docopt::new(USAGE)
+                      .and_then(|dopt| dopt.version(Some(version)).parse())
+                      .unwrap_or_else(|e| e.exit());
+    let geometry = args.get_str("--geometry");
+    let geometry = geometry_parse(&geometry);
+
+    let path = args.get_str("FILE");
+    let path = Path::new(path);
+
+    generate_mosaic(path, geometry.0, geometry.1);
 }
