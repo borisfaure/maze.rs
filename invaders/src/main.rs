@@ -137,7 +137,7 @@ fn geometry_parse(geometry: &str) -> (u32, u32) {
 }
 
 fn main() {
-    let version = "0.0.1".to_owned();
+    let version = env!("CARGO_PKG_VERSION").to_owned();
     let args = Docopt::new(USAGE)
                       .and_then(|dopt| dopt.version(Some(version)).parse())
                       .unwrap_or_else(|e| e.exit());
