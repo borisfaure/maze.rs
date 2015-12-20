@@ -285,9 +285,8 @@ impl Maze {
     }
 
     fn draw(&mut self, renderer: &Renderer) -> RgbImage {
-        let mut img = RgbImage::new(
-            (self.geometry.width * renderer.pixel_size) as u32,
-            (self.geometry.height * renderer.pixel_size) as u32);
+        let g = renderer.image_geometry(&self.geometry);
+        let mut img = RgbImage::new(g.width as u32, g.height as u32);
 
         for y in 0..self.geometry.height{
             for x in 0..self.geometry.width {
@@ -311,28 +310,26 @@ impl Renderer {
         }
     }
 
+    fn draw_cell_plain(&self, img: &mut RgbImage, c: &Coord, p: &Rgb<u8>) {
+        for i in 0..self.pixel_size {
+            for j in 0..self.pixel_size {
+                img.put_pixel((c.x * self.pixel_size + i) as u32,
+                (c.y * self.pixel_size + j) as u32,
+                *p);
+            }
+        }
+    }
+
     fn draw_cell_normal(&self, img: &mut RgbImage, c: &Coord,
                         cell_kind: CellKind) {
         match cell_kind {
             CellKind::PathKind => {
                 let path_color = Rgb{data:[253, 246, 227]};
-                for i in 0..self.pixel_size {
-                    for j in 0..self.pixel_size {
-                        img.put_pixel((c.x * self.pixel_size + i) as u32,
-                        (c.y * self.pixel_size + j) as u32,
-                        path_color);
-                    }
-                }
+                self.draw_cell_plain(img, c, &path_color)
             },
             CellKind::WallKind => {
                 let wall_color = Rgb{data:[  7,  54,  66]};
-                for i in 0..self.pixel_size {
-                    for j in 0..self.pixel_size {
-                        img.put_pixel((c.x * self.pixel_size + i) as u32,
-                        (c.y * self.pixel_size + j) as u32,
-                        wall_color);
-                    }
-                }
+                self.draw_cell_plain(img, c, &wall_color);
             },
             _ => {
             }
@@ -357,6 +354,12 @@ impl Renderer {
         Geometry{
             width: g.width / self.pixel_size,
             height: g.height / self.pixel_size,
+        }
+    }
+    fn image_geometry(&self, g: &Geometry) -> Geometry {
+        Geometry{
+            width:  g.width * self.pixel_size,
+            height: g.height * self.pixel_size,
         }
     }
 }
