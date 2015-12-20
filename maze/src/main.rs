@@ -15,8 +15,8 @@ use rand::{
 
 #[derive(Debug)]
 struct Coord {
-    x: u32,
-    y: u32,
+    x: usize,
+    y: usize,
 }
 type Path = Coord;
 type Wall = Coord;
@@ -26,15 +26,20 @@ fn pop_random_wall(walls: &mut Vec<Wall>) -> Wall {
     walls.swap_remove(pos)
 }
 
+#[derive(Debug,Clone)]
+enum CellKind {
+    WallKind,
+    PathKind,
+    Undefined
+}
+
 struct Maze {
-    img: RgbImage,
-    pixel_size: u32,
-    width: u32,
-    height: u32,
-    grid_width: u32,
-    grid_height: u32,
-    path_color: Rgb<u8>,
-    wall_color: Rgb<u8>,
+    pixel_size: usize,
+    width: usize,
+    height: usize,
+    grid_width: usize,
+    grid_height: usize,
+    grid: Vec<CellKind>,
 }
 
 #[derive(Debug)]
@@ -53,13 +58,6 @@ fn opposite(dir: &Direction) -> Direction {
     }
 }
 
-#[derive(Debug)]
-enum CellKind {
-    Wall,
-    Path,
-    Undefined
-}
-
 fn add_walls(walls: &mut Vec<Wall>, new_walls: Vec<Coord>) {
     for w in new_walls {
         walls.push(w);
@@ -67,79 +65,47 @@ fn add_walls(walls: &mut Vec<Wall>, new_walls: Vec<Coord>) {
 }
 
 impl Maze {
-    fn new(width: u32, height: u32, pixel_size: u32) -> Maze {
+    fn new(width: usize, height: usize, pixel_size: usize) -> Maze {
         let mut m = Maze {
             width: width,
             height: height,
-            grid_width: width / pixel_size,
-            grid_height: height / pixel_size,
+            grid_width: (width / pixel_size) as usize,
+            grid_height: (height / pixel_size) as usize,
+            grid: Vec::new(),
             pixel_size: pixel_size,
-            img: RgbImage::new(width, height),
-            path_color: Rgb{data:[253, 246, 227]},
-            wall_color: Rgb{data:[  7,  54,  66]},
         };
-        /* draw right/bottom walls if needed */
-        let d = m.width - m.grid_width * m.pixel_size;
-        for i in 0..d {
-            let x = m.grid_width * m.pixel_size + i;
-            for y in 0..m.height {
-                m.img.put_pixel(x, y, m.wall_color);
-            }
-        }
-        let d = m.height - m.grid_height * m.pixel_size;
-        for i in 0..d {
-            let y = m.grid_height * m.pixel_size + i;
-            for x in 0..m.width {
-                m.img.put_pixel(x, y, m.wall_color);
-            }
+        m.grid.reserve(m.grid_width * m.grid_height);
+        for _ in 0..(m.grid_width * m.grid_height) {
+            m.grid.push(CellKind::Undefined);
         }
         m
     }
 
     fn cell_kind(&self, c: &Coord) -> CellKind {
         if c.x >= self.grid_width || c.y >= self.grid_height {
-            return CellKind::Undefined;
-        }
-        let p = self.img.get_pixel(c.x * self.pixel_size,
-                               c.y * self.pixel_size);
-        if *p == self.wall_color {
-            CellKind::Wall
-        } else if *p == self.path_color {
-            CellKind::Path
-        } else {
             CellKind::Undefined
+        } else {
+            self.grid[c.y * self.grid_width + c.x].clone()
         }
     }
 
-    fn draw_path(&mut self, c: &Coord) {
-        if let CellKind::Path = self.cell_kind(&c) {
+    fn set_path(&mut self, c: &Coord) {
+        if let CellKind::PathKind = self.cell_kind(&c) {
             return;
         }
-        for i in 0..self.pixel_size {
-            for j in 0..self.pixel_size {
-                self.img.put_pixel(c.x * self.pixel_size + i,
-                                   c.y * self.pixel_size + j,
-                                   self.path_color);
-            }
-        }
+        self.grid[c.y * self.grid_width + c.x] = CellKind::PathKind;
     }
 
-    fn draw_wall(&mut self, c: &Coord) {
-        if let CellKind::Wall = self.cell_kind(&c) {
+    fn set_wall(&mut self, c: &Coord) {
+        if let CellKind::WallKind = self.cell_kind(&c) {
             return;
         }
-        for i in 0..self.pixel_size {
-            for j in 0..self.pixel_size {
-                self.img.put_pixel(c.x * self.pixel_size + i,
-                                   c.y * self.pixel_size + j,
-                                   self.wall_color);
-            }
-        }
+        self.grid[c.y * self.grid_width + c.x] = CellKind::WallKind;
     }
 
-    fn draw_walls(&mut self, walls: &Vec<Coord>) {
+    fn set_walls(&mut self, walls: &Vec<Coord>) {
         for w in walls {
-            self.draw_wall(&w as &Wall);
+            self.set_wall(&w as &Wall);
         }
     }
 
@@ -254,9 +220,9 @@ impl Maze {
     fn randomized_prim(&mut self) {
         let mut walls : Vec<Wall> = Vec::new();
         let start = Coord{x:0, y:0};
-        self.draw_path(&start);
+        self.set_path(&start);
         let new_walls = self.get_undefined_cells_around(&start);
-        self.draw_walls(&new_walls);
+        self.set_walls(&new_walls);
         add_walls(&mut walls, new_walls);
 
         while !walls.is_empty() {
@@ -267,38 +233,38 @@ impl Maze {
                 let o2 = self.get_coord_next(&w as &Coord, &opposite(&dir));
                 match (o1, o2) {
                     (Some(c1), Some(c2)) => {
-                        if let (CellKind::Path, CellKind::Path)
+                        if let (CellKind::PathKind, CellKind::PathKind)
                             = (self.cell_kind(&c1), self.cell_kind(&c2)) {
                                 continue;
                         }
-                        self.draw_path(&w);
-                        self.draw_path(&c2);
-                        self.draw_path(&c1);
+                        self.set_path(&w);
+                        self.set_path(&c2);
+                        self.set_path(&c1);
                         let new_walls = self.get_undefined_cells_around(&w);
-                        self.draw_walls(&new_walls);
+                        self.set_walls(&new_walls);
                         let new_walls = self.get_undefined_cells_around(&c1);
-                        self.draw_walls(&new_walls);
+                        self.set_walls(&new_walls);
                         add_walls(&mut walls, new_walls);
                         let new_walls = self.get_undefined_cells_around(&c2);
-                        self.draw_walls(&new_walls);
+                        self.set_walls(&new_walls);
                         add_walls(&mut walls, new_walls);
                     },
                     (Some(c), _) => {
-                        self.draw_path(&w);
-                        self.draw_path(&c);
+                        self.set_path(&w);
+                        self.set_path(&c);
                         let new_walls = self.get_undefined_cells_around(&w);
-                        self.draw_walls(&new_walls);
+                        self.set_walls(&new_walls);
                         let new_walls = self.get_undefined_cells_around(&c);
-                        self.draw_walls(&new_walls);
+                        self.set_walls(&new_walls);
                         add_walls(&mut walls, new_walls);
                     },
                     (_, Some(c)) => {
-                        self.draw_path(&w);
-                        self.draw_path(&c);
+                        self.set_path(&w);
+                        self.set_path(&c);
                         let new_walls = self.get_undefined_cells_around(&w);
-                        self.draw_walls(&new_walls);
+                        self.set_walls(&new_walls);
                         let new_walls = self.get_undefined_cells_around(&c);
-                        self.draw_walls(&new_walls);
+                        self.set_walls(&new_walls);
                         add_walls(&mut walls, new_walls);
                     },
                     (_, _) => {
@@ -307,17 +273,68 @@ impl Maze {
             }
         }
     }
-    fn save(&mut self, path: &path::Path) {
-        let _ = self.img.save(path);
+
+    fn draw(&mut self) -> RgbImage {
+        let mut img = RgbImage::new(self.width as u32, self.height as u32);
+        let path_color = Rgb{data:[253, 246, 227]};
+        let wall_color = Rgb{data:[  7,  54,  66]};
+
+        /* draw right/bottom walls if needed */
+        let d = self.width - self.grid_width * self.pixel_size;
+        for i in 0..d {
+            let x = self.grid_width * self.pixel_size + i;
+            for y in 0..self.height {
+                img.put_pixel(x as u32, y as u32, wall_color);
+            }
+        }
+        let d = self.height - self.grid_height * self.pixel_size;
+        for i in 0..d {
+            let y = self.grid_height * self.pixel_size + i;
+            for x in 0..self.width {
+                img.put_pixel(x as u32, y as u32, wall_color);
+            }
+        }
+
+        for y in 0..self.grid_height{
+            for x in 0..self.grid_width {
+                match self.cell_kind(&Coord{x: x, y: y}) {
+                    CellKind::PathKind => {
+                        for i in 0..self.pixel_size {
+                            for j in 0..self.pixel_size {
+                                img.put_pixel((x * self.pixel_size + i) as u32,
+                                              (y * self.pixel_size + j) as u32,
+                                              path_color);
+                            }
+                        }
+                    },
+                    CellKind::WallKind => {
+                        for i in 0..self.pixel_size {
+                            for j in 0..self.pixel_size {
+                                img.put_pixel((x * self.pixel_size + i) as u32,
+                                              (y * self.pixel_size + j) as u32,
+                                              wall_color);
+                            }
+                        }
+                    },
+                    _ => {
+                    }
+                }
+        /*
+        */
+            }
+        }
+        img
     }
 }
 
 
-fn generate_image(path: &path::Path, width: u32, height: u32) {
+fn generate_image(path: &path::Path, width: usize, height: usize) {
     let mut maze = Maze::new(width, height, 4);
 
     maze.randomized_prim();
-    maze.save(path);
+
+    let img = maze.draw();
+    let _ = img.save(path);
 }
 
 const USAGE: &'static str = "
@@ -337,15 +354,15 @@ Options:
 
 
 
-fn geometry_parse(geometry: &str) -> (u32, u32) {
+fn geometry_parse(geometry: &str) -> (usize, usize) {
     let geometry : Vec<&str> = geometry.split('x').collect();
     if geometry.len() != 2 {
         panic!("invalid geometry");
     }
-    let width : u32 = geometry[0].parse()
+    let width : usize = geometry[0].parse()
         .ok()
         .expect("invalid geometry");
-    let height : u32 = geometry[1].parse()
+    let height : usize = geometry[1].parse()
         .ok()
         .expect("invalid geometry");
     (width, height)
