@@ -14,12 +14,24 @@ use rand::{
 };
 
 #[derive(Debug)]
+enum Rendering {
+    Normal,
+    Invaders
+}
+
+#[derive(Debug)]
 struct Coord {
     x: usize,
     y: usize,
 }
 type Path = Coord;
 type Wall = Coord;
+
+#[derive(Debug,Clone)]
+struct Geometry{
+    width: usize,
+    height: usize,
+}
 
 fn pop_random_wall(walls: &mut Vec<Wall>) -> Wall {
     let pos: usize = rand::random::<usize>() % walls.len();
@@ -33,12 +45,14 @@ enum CellKind {
     Undefined
 }
 
-struct Maze {
+struct Renderer {
     pixel_size: usize,
-    width: usize,
-    height: usize,
-    grid_width: usize,
-    grid_height: usize,
+    rendering: Rendering,
+}
+
+
+struct Maze {
+    geometry: Geometry,
     grid: Vec<CellKind>,
 }
 
@@ -65,27 +79,23 @@ fn add_walls(walls: &mut Vec<Wall>, new_walls: Vec<Coord>) {
 }
 
 impl Maze {
-    fn new(width: usize, height: usize, pixel_size: usize) -> Maze {
+    fn new(g: &Geometry) -> Maze {
         let mut m = Maze {
-            width: width,
-            height: height,
-            grid_width: (width / pixel_size) as usize,
-            grid_height: (height / pixel_size) as usize,
+            geometry: g.clone(),
             grid: Vec::new(),
-            pixel_size: pixel_size,
         };
-        m.grid.reserve(m.grid_width * m.grid_height);
-        for _ in 0..(m.grid_width * m.grid_height) {
+        m.grid.reserve(g.width * g.height);
+        for _ in 0..(g.width * g.height) {
             m.grid.push(CellKind::Undefined);
         }
         m
     }
 
     fn cell_kind(&self, c: &Coord) -> CellKind {
-        if c.x >= self.grid_width || c.y >= self.grid_height {
+        if c.x >= self.geometry.width || c.y >= self.geometry.height {
             CellKind::Undefined
         } else {
-            self.grid[c.y * self.grid_width + c.x].clone()
+            self.grid[c.y * self.geometry.width + c.x].clone()
         }
     }
 
@@ -93,14 +103,14 @@ impl Maze {
         if let CellKind::PathKind = self.cell_kind(&c) {
             return;
         }
-        self.grid[c.y * self.grid_width + c.x] = CellKind::PathKind;
+        self.grid[c.y * self.geometry.width + c.x] = CellKind::PathKind;
     }
 
     fn set_wall(&mut self, c: &Coord) {
         if let CellKind::WallKind = self.cell_kind(&c) {
             return;
         }
-        self.grid[c.y * self.grid_width + c.x] = CellKind::WallKind;
+        self.grid[c.y * self.geometry.width + c.x] = CellKind::WallKind;
     }
 
     fn set_walls(&mut self, walls: &Vec<Coord>) {
@@ -133,7 +143,7 @@ impl Maze {
         }
     }
     fn get_coord_down(&self, c: &Coord) -> Option<Coord> {
-        if c.y >= self.grid_height - 1 {
+        if c.y >= self.geometry.height - 1 {
             None
         } else {
             Some(Coord{x: c.x, y: c.y + 1})
@@ -147,7 +157,7 @@ impl Maze {
         }
     }
     fn get_coord_right(&self, c: &Coord) -> Option<Coord> {
-        if c.x >= self.grid_width - 1 {
+        if c.x >= self.geometry.width - 1 {
             None
         } else {
             Some(Coord{x: c.x + 1, y: c.y})
@@ -274,53 +284,15 @@ impl Maze {
         }
     }
 
-    fn draw(&mut self) -> RgbImage {
-        let mut img = RgbImage::new(self.width as u32, self.height as u32);
-        let path_color = Rgb{data:[253, 246, 227]};
-        let wall_color = Rgb{data:[  7,  54,  66]};
+    fn draw(&mut self, renderer: &Renderer) -> RgbImage {
+        let mut img = RgbImage::new(
+            (self.geometry.width * renderer.pixel_size) as u32,
+            (self.geometry.height * renderer.pixel_size) as u32);
 
-        /* draw right/bottom walls if needed */
-        let d = self.width - self.grid_width * self.pixel_size;
-        for i in 0..d {
-            let x = self.grid_width * self.pixel_size + i;
-            for y in 0..self.height {
-                img.put_pixel(x as u32, y as u32, wall_color);
-            }
-        }
-        let d = self.height - self.grid_height * self.pixel_size;
-        for i in 0..d {
-            let y = self.grid_height * self.pixel_size + i;
-            for x in 0..self.width {
-                img.put_pixel(x as u32, y as u32, wall_color);
-            }
-        }
-
-        for y in 0..self.grid_height{
-            for x in 0..self.grid_width {
-                match self.cell_kind(&Coord{x: x, y: y}) {
-                    CellKind::PathKind => {
-                        for i in 0..self.pixel_size {
-                            for j in 0..self.pixel_size {
-                                img.put_pixel((x * self.pixel_size + i) as u32,
-                                              (y * self.pixel_size + j) as u32,
-                                              path_color);
-                            }
-                        }
-                    },
-                    CellKind::WallKind => {
-                        for i in 0..self.pixel_size {
-                            for j in 0..self.pixel_size {
-                                img.put_pixel((x * self.pixel_size + i) as u32,
-                                              (y * self.pixel_size + j) as u32,
-                                              wall_color);
-                            }
-                        }
-                    },
-                    _ => {
-                    }
-                }
-        /*
-        */
+        for y in 0..self.geometry.height{
+            for x in 0..self.geometry.width {
+                let c = Coord{x: x, y: y};
+                renderer.draw_cell(&mut img, &c, self.cell_kind(&c));
             }
         }
         img
@@ -328,33 +300,101 @@ impl Maze {
 }
 
 
-fn generate_image(path: &path::Path, width: usize, height: usize) {
-    let mut maze = Maze::new(width, height, 4);
+impl Renderer {
+    fn draw_cell(&self, img: &mut RgbImage, c: &Coord, cell_kind: CellKind) {
+        match self.rendering {
+            Rendering::Normal=> {
+                self.draw_cell_normal(img, c, cell_kind);
+            },
+            Rendering::Invaders => {
+            }
+        }
+    }
+
+    fn draw_cell_normal(&self, img: &mut RgbImage, c: &Coord,
+                        cell_kind: CellKind) {
+        match cell_kind {
+            CellKind::PathKind => {
+                let path_color = Rgb{data:[253, 246, 227]};
+                for i in 0..self.pixel_size {
+                    for j in 0..self.pixel_size {
+                        img.put_pixel((c.x * self.pixel_size + i) as u32,
+                        (c.y * self.pixel_size + j) as u32,
+                        path_color);
+                    }
+                }
+            },
+            CellKind::WallKind => {
+                let wall_color = Rgb{data:[  7,  54,  66]};
+                for i in 0..self.pixel_size {
+                    for j in 0..self.pixel_size {
+                        img.put_pixel((c.x * self.pixel_size + i) as u32,
+                        (c.y * self.pixel_size + j) as u32,
+                        wall_color);
+                    }
+                }
+            },
+            _ => {
+            }
+        }
+    }
+
+    fn new(mode: Rendering) -> Renderer {
+        let pixel_size = match mode {
+            Rendering::Normal => {
+                4
+            },
+            Rendering::Invaders => {
+                7
+            },
+        };
+        Renderer {
+            pixel_size: pixel_size,
+            rendering: mode,
+        }
+    }
+    fn grid_geometry(&self, g: &Geometry) -> Geometry {
+        Geometry{
+            width: g.width / self.pixel_size,
+            height: g.height / self.pixel_size,
+        }
+    }
+}
+
+fn generate_image(path: &path::Path, g: Geometry, mode: Rendering) {
+    let renderer = Renderer::new(mode);
+    let grid_geometry = renderer.grid_geometry(&g);
+
+    let mut maze = Maze::new(&grid_geometry);
 
     maze.randomized_prim();
 
-    let img = maze.draw();
+    let img = maze.draw(&renderer);
     let _ = img.save(path);
 }
+
 
 const USAGE: &'static str = "
 Maze background generator.
 
 Usage: maze [options] FILE
-       maze -g GEOM <kind> FILE
-       maze --geometry GEOM <kind> FILE
+       maze -g GEOM FILE
+       maze --geometry GEOM FILE
+       maze --rendering=RENDERING FILE
+       maze -r RENDERING FILE
        maze -h | --help
        maze -v | --version
 
 Options:
-    -h, --help                            Show this message
-    -v, --version                         Show the version
+    -h, --help                 Show this message
+    -v, --version              Show the version
     -g=<WIDTHxHEIGHT>, --geometry=<WIDTHxHEIGHT>  Geometry of the image to generate [default: 100x100]
+    -r=RENDERING, --rendering=RENDERING      Rendering mode. Valid values are: normal, invaders. [default: normal]
 ";
 
 
 
-fn geometry_parse(geometry: &str) -> (usize, usize) {
+fn geometry_parse(geometry: &str) -> Geometry {
     let geometry : Vec<&str> = geometry.split('x').collect();
     if geometry.len() != 2 {
         panic!("invalid geometry");
@@ -365,7 +405,21 @@ fn geometry_parse(geometry: &str) -> (usize, usize) {
     let height : usize = geometry[1].parse()
         .ok()
         .expect("invalid geometry");
-    (width, height)
+    Geometry{width: width, height: height}
+}
+
+fn rendering_parse(rendering: &str) -> Rendering {
+    match rendering {
+        "normal" => {
+            Rendering::Normal
+        },
+        "invaders" => {
+            Rendering::Invaders
+        },
+        _ => {
+            panic!("invalid rendering mode")
+        }
+    }
 }
 
 fn main() {
@@ -376,8 +430,11 @@ fn main() {
     let geometry = args.get_str("--geometry");
     let geometry = geometry_parse(&geometry);
 
+    let rendering = args.get_str("--rendering");
+    let rendering = rendering_parse(&rendering);
+
     let path = args.get_str("FILE");
     let path = path::Path::new(path);
 
-    generate_image(path, geometry.0, geometry.1);
+    generate_image(path, geometry, rendering);
 }
