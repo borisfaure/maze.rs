@@ -2,7 +2,19 @@ extern crate docopt;
 extern crate image;
 extern crate rand;
 
+mod invaders;
+
+#[derive(Debug,Clone)]
+pub struct Geometry{
+    width: usize,
+    height: usize,
+}
+
 use docopt::Docopt;
+use std::path;
+
+mod maze {
+
 use std::path;
 use image::{
     RgbImage,
@@ -10,25 +22,20 @@ use image::{
 };
 use rand::{
     random,
-    Rng
+    Rng,
+    thread_rng,
 };
 
 #[derive(Debug)]
 pub struct Coord {
-    x: usize,
-    y: usize,
+    pub x: usize,
+    pub y: usize,
 }
 type Path = Coord;
 type Wall = Coord;
 
-#[derive(Debug,Clone)]
-struct Geometry{
-    width: usize,
-    height: usize,
-}
-
 fn pop_random_wall(walls: &mut Vec<Wall>) -> Wall {
-    let pos: usize = rand::random::<usize>() % walls.len();
+    let pos: usize = random::<usize>() % walls.len();
     walls.swap_remove(pos)
 }
 
@@ -40,7 +47,7 @@ pub enum CellKind {
 }
 
 struct Maze {
-    geometry: Geometry,
+    geometry: super::Geometry,
     grid: Vec<CellKind>,
 }
 
@@ -67,7 +74,7 @@ fn add_walls(walls: &mut Vec<Wall>, new_walls: Vec<Coord>) {
 }
 
 impl Maze {
-    fn new(g: &Geometry) -> Maze {
+    fn new(g: &super::Geometry) -> Maze {
         let mut m = Maze {
             geometry: g.clone(),
             grid: Vec::new(),
@@ -163,7 +170,7 @@ impl Maze {
 
     fn get_random_wall_direction(&self, w: &Wall) -> Option<Direction> {
         let d;
-        let mut rng = rand::thread_rng();
+        let mut rng = thread_rng();
         if w.x % 2 == 0 && w.y % 2 == 0 {
             d = rng.next_u32() % 4;
         } else if w.x % 2 == 0 {
@@ -289,28 +296,28 @@ impl Maze {
 
 pub fn draw_cell_plain<T: Rendering>(renderer: &T, img: &mut RgbImage,
                                      c: &Coord, p: &Rgb<u8>) {
-    let pixel_size = renderer.pixel_size();
-    for i in 0..pixel_size {
-        for j in 0..pixel_size {
-            img.put_pixel((c.x * pixel_size + i) as u32,
-            (c.y * pixel_size + j) as u32,
-            *p);
+    let tile_size = renderer.tile_size();
+    for i in 0..tile_size {
+        for j in 0..tile_size {
+            img.put_pixel((c.x * tile_size + i) as u32,
+                          (c.y * tile_size + j) as u32,
+                          *p);
         }
     }
 }
 
 pub trait Rendering {
-    fn pixel_size(&self) -> usize;
+    fn tile_size(&self) -> usize;
     fn draw_cell(&self, &mut RgbImage, &Coord, CellKind);
 }
 
 
-struct RendererPlain{
-    path_color: Rgb<u8>,
-    wall_color: Rgb<u8>,
+pub struct RendererPlain{
+    pub path_color: Rgb<u8>,
+    pub wall_color: Rgb<u8>,
 }
 impl Rendering for RendererPlain{
-    fn pixel_size(&self) -> usize {
+    fn tile_size(&self) -> usize {
         4
     }
     fn draw_cell(&self, img: &mut RgbImage, c: &Coord,
@@ -326,42 +333,25 @@ impl Rendering for RendererPlain{
             }
         }
     }
-
 }
-/*
-    fn new(mode: RenderingMode) -> Renderer {
-        let pixel_size = match mode {
-            RenderingMode::Normal => {
-                4
-            },
-            RenderingMode::Invaders => {
-                7
-            },
-        };
-        Renderer {
-            pixel_size: pixel_size,
-            mode: mode,
-        }
-    }
-*/
 
-fn grid_geometry<T: ?Sized + Rendering>(renderer: &T, g: &Geometry) -> Geometry {
-    let pixel_size = renderer.pixel_size();
-    Geometry{
-        width: g.width / pixel_size,
-        height: g.height / pixel_size,
+fn grid_geometry<T: ?Sized + Rendering>(renderer: &T, g: &super::Geometry) -> super::Geometry {
+    let tile_size = renderer.tile_size();
+    super::Geometry{
+        width: g.width / tile_size,
+        height: g.height / tile_size,
     }
 }
 
-fn image_geometry<T: ?Sized + Rendering>(renderer: &T, g: &Geometry) -> Geometry {
-    let pixel_size = renderer.pixel_size();
-    Geometry{
-        width:  g.width * pixel_size,
-        height: g.height * pixel_size,
+fn image_geometry<T: ?Sized + Rendering>(renderer: &T, g: &super::Geometry) -> super::Geometry {
+    let tile_size = renderer.tile_size();
+    super::Geometry{
+        width:  g.width * tile_size,
+        height: g.height * tile_size,
     }
 }
 
-fn generate_image<T: ?Sized + Rendering>(path: &path::Path, g: Geometry, renderer: &T) {
+pub fn generate_image<T: ?Sized + Rendering>(path: &path::Path, g: super::Geometry, renderer: &T) {
     let grid_geometry = grid_geometry(renderer, &g);
 
     let mut maze = Maze::new(&grid_geometry);
@@ -370,6 +360,7 @@ fn generate_image<T: ?Sized + Rendering>(path: &path::Path, g: Geometry, rendere
 
     let img = maze.draw(renderer);
     let _ = img.save(path);
+}
 }
 
 
@@ -407,17 +398,20 @@ fn geometry_parse(geometry: &str) -> Geometry {
     Geometry{width: width, height: height}
 }
 
-fn rendering_parse(rendering: &str) -> Box<Rendering> {
+fn rendering_parse(rendering: &str) -> Box<maze::Rendering> {
     match rendering {
         "plain" => {
-            Box::new(RendererPlain {
-                path_color: Rgb{data:[253, 246, 227]},
-                wall_color: Rgb{data:[  7,  54,  66]},
+            Box::new(maze::RendererPlain {
+                path_color: image::Rgb{data:[253, 246, 227]},
+                wall_color: image::Rgb{data:[  7,  54,  66]},
             })
         },
-        //"invaders" => {
-
-        //},
+        "invaders" => {
+            Box::new(invaders::RendererInvaders{
+                invader_color:    image::Rgb{data:[253, 246, 227]},
+                wall_color: image::Rgb{data:[  7,  54,  66]},
+            })
+        },
         _ => {
             panic!("invalid rendering mode")
         }
@@ -438,5 +432,5 @@ fn main() {
     let path = args.get_str("FILE");
     let path = path::Path::new(path);
 
-    generate_image(path, geometry, &*rendering);
+    maze::generate_image(path, geometry, &*rendering);
 }
