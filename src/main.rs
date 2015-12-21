@@ -14,13 +14,7 @@ use rand::{
 };
 
 #[derive(Debug)]
-enum Rendering {
-    Normal,
-    Invaders
-}
-
-#[derive(Debug)]
-struct Coord {
+pub struct Coord {
     x: usize,
     y: usize,
 }
@@ -39,17 +33,11 @@ fn pop_random_wall(walls: &mut Vec<Wall>) -> Wall {
 }
 
 #[derive(Debug,Clone)]
-enum CellKind {
+pub enum CellKind {
     WallKind,
     PathKind,
     Undefined
 }
-
-struct Renderer {
-    pixel_size: usize,
-    rendering: Rendering,
-}
-
 
 struct Maze {
     geometry: Geometry,
@@ -284,8 +272,8 @@ impl Maze {
         }
     }
 
-    fn draw(&mut self, renderer: &Renderer) -> RgbImage {
-        let g = renderer.image_geometry(&self.geometry);
+    fn draw<T: ?Sized + Rendering>(&mut self, renderer: &T) -> RgbImage {
+        let g = image_geometry(renderer, &self.geometry);
         let mut img = RgbImage::new(g.width as u32, g.height as u32);
 
         for y in 0..self.geometry.height{
@@ -299,80 +287,88 @@ impl Maze {
 }
 
 
-impl Renderer {
-    fn draw_cell(&self, img: &mut RgbImage, c: &Coord, cell_kind: CellKind) {
-        match self.rendering {
-            Rendering::Normal=> {
-                self.draw_cell_normal(img, c, cell_kind);
-            },
-            Rendering::Invaders => {
-            }
+pub fn draw_cell_plain<T: Rendering>(renderer: &T, img: &mut RgbImage,
+                                     c: &Coord, p: &Rgb<u8>) {
+    let pixel_size = renderer.pixel_size();
+    for i in 0..pixel_size {
+        for j in 0..pixel_size {
+            img.put_pixel((c.x * pixel_size + i) as u32,
+            (c.y * pixel_size + j) as u32,
+            *p);
         }
     }
+}
 
-    fn draw_cell_plain(&self, img: &mut RgbImage, c: &Coord, p: &Rgb<u8>) {
-        for i in 0..self.pixel_size {
-            for j in 0..self.pixel_size {
-                img.put_pixel((c.x * self.pixel_size + i) as u32,
-                (c.y * self.pixel_size + j) as u32,
-                *p);
-            }
-        }
+pub trait Rendering {
+    fn pixel_size(&self) -> usize;
+    fn draw_cell(&self, &mut RgbImage, &Coord, CellKind);
+}
+
+
+struct RendererPlain{
+    path_color: Rgb<u8>,
+    wall_color: Rgb<u8>,
+}
+impl Rendering for RendererPlain{
+    fn pixel_size(&self) -> usize {
+        4
     }
-
-    fn draw_cell_normal(&self, img: &mut RgbImage, c: &Coord,
+    fn draw_cell(&self, img: &mut RgbImage, c: &Coord,
                         cell_kind: CellKind) {
         match cell_kind {
             CellKind::PathKind => {
-                let path_color = Rgb{data:[253, 246, 227]};
-                self.draw_cell_plain(img, c, &path_color)
+                draw_cell_plain(self, img, c, &self.path_color)
             },
             CellKind::WallKind => {
-                let wall_color = Rgb{data:[  7,  54,  66]};
-                self.draw_cell_plain(img, c, &wall_color);
+                draw_cell_plain(self, img, c, &self.wall_color);
             },
             _ => {
             }
         }
     }
 
-    fn new(mode: Rendering) -> Renderer {
+}
+/*
+    fn new(mode: RenderingMode) -> Renderer {
         let pixel_size = match mode {
-            Rendering::Normal => {
+            RenderingMode::Normal => {
                 4
             },
-            Rendering::Invaders => {
+            RenderingMode::Invaders => {
                 7
             },
         };
         Renderer {
             pixel_size: pixel_size,
-            rendering: mode,
+            mode: mode,
         }
     }
-    fn grid_geometry(&self, g: &Geometry) -> Geometry {
-        Geometry{
-            width: g.width / self.pixel_size,
-            height: g.height / self.pixel_size,
-        }
-    }
-    fn image_geometry(&self, g: &Geometry) -> Geometry {
-        Geometry{
-            width:  g.width * self.pixel_size,
-            height: g.height * self.pixel_size,
-        }
+*/
+
+fn grid_geometry<T: ?Sized + Rendering>(renderer: &T, g: &Geometry) -> Geometry {
+    let pixel_size = renderer.pixel_size();
+    Geometry{
+        width: g.width / pixel_size,
+        height: g.height / pixel_size,
     }
 }
 
-fn generate_image(path: &path::Path, g: Geometry, mode: Rendering) {
-    let renderer = Renderer::new(mode);
-    let grid_geometry = renderer.grid_geometry(&g);
+fn image_geometry<T: ?Sized + Rendering>(renderer: &T, g: &Geometry) -> Geometry {
+    let pixel_size = renderer.pixel_size();
+    Geometry{
+        width:  g.width * pixel_size,
+        height: g.height * pixel_size,
+    }
+}
+
+fn generate_image<T: ?Sized + Rendering>(path: &path::Path, g: Geometry, renderer: &T) {
+    let grid_geometry = grid_geometry(renderer, &g);
 
     let mut maze = Maze::new(&grid_geometry);
 
     maze.randomized_prim();
 
-    let img = maze.draw(&renderer);
+    let img = maze.draw(renderer);
     let _ = img.save(path);
 }
 
@@ -392,7 +388,7 @@ Options:
     -h, --help                 Show this message
     -v, --version              Show the version
     -g=<WIDTHxHEIGHT>, --geometry=<WIDTHxHEIGHT>  Geometry of the image to generate [default: 100x100]
-    -r=RENDERING, --rendering=RENDERING      Rendering mode. Valid values are: normal, invaders. [default: normal]
+    -r=RENDERING, --rendering=RENDERING      Rendering mode. Valid values are: plain, invaders. [default: plain]
 ";
 
 
@@ -411,14 +407,17 @@ fn geometry_parse(geometry: &str) -> Geometry {
     Geometry{width: width, height: height}
 }
 
-fn rendering_parse(rendering: &str) -> Rendering {
+fn rendering_parse(rendering: &str) -> Box<Rendering> {
     match rendering {
-        "normal" => {
-            Rendering::Normal
+        "plain" => {
+            Box::new(RendererPlain {
+                path_color: Rgb{data:[253, 246, 227]},
+                wall_color: Rgb{data:[  7,  54,  66]},
+            })
         },
-        "invaders" => {
-            Rendering::Invaders
-        },
+        //"invaders" => {
+
+        //},
         _ => {
             panic!("invalid rendering mode")
         }
@@ -439,5 +438,5 @@ fn main() {
     let path = args.get_str("FILE");
     let path = path::Path::new(path);
 
-    generate_image(path, geometry, rendering);
+    generate_image(path, geometry, &*rendering);
 }
