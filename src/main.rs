@@ -3,6 +3,7 @@ extern crate image;
 extern crate rand;
 
 mod invaders;
+mod mosaic;
 
 #[derive(Debug,Clone)]
 pub struct Geometry{
@@ -386,7 +387,7 @@ Options:
     -h, --help                 Show this message
     -v, --version              Show the version
     -g=<WIDTHxHEIGHT>, --geometry=<WIDTHxHEIGHT>  Geometry of the image to generate [default: 100x100]
-    -r=RENDERING, --rendering=RENDERING      Rendering mode. Valid values are: plain, invaders. [default: plain]
+    -r=RENDERING, --rendering=RENDERING      Rendering mode. Valid values are: plain, invaders, mosaic. [default: plain]
 ";
 
 
@@ -417,6 +418,11 @@ fn rendering_parse(rendering: &str) -> Box<maze::Rendering> {
             Box::new(invaders::RendererInvaders{
                 invader_color:    image::Rgb{data:[253, 246, 227]},
                 wall_color: image::Rgb{data:[  7,  54,  66]},
+            })
+        },
+        "mosaic" => {
+            Box::new(mosaic::RendererMosaic{
+                is_inverted: false,
             })
         },
         _ => {
