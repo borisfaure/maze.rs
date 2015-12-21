@@ -277,13 +277,20 @@ impl Maze {
                 }
             }
         }
+        for y in (0..self.geometry.height).filter(|&v| v % 2 == 1) {
+            for x in (0..self.geometry.width).filter(|&v| v % 2 == 1) {
+                if let CellKind::Undefined= self.cell_kind(&Coord{x:x, y:y}) {
+                    self.grid[y * self.geometry.width + x] = CellKind::WallKind;
+                }
+            }
+        }
     }
 
     fn draw<T: ?Sized + Rendering>(&mut self, renderer: &T) -> RgbImage {
         let g = image_geometry(renderer, &self.geometry);
         let mut img = RgbImage::new(g.width as u32, g.height as u32);
 
-        for y in 0..self.geometry.height{
+        for y in 0..self.geometry.height {
             for x in 0..self.geometry.width {
                 let c = Coord{x: x, y: y};
                 renderer.draw_cell(&mut img, &c, self.cell_kind(&c));
