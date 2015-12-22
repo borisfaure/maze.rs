@@ -13,6 +13,7 @@ pub struct Geometry{
 
 use docopt::Docopt;
 use std::path;
+use std::str::FromStr;
 
 mod maze {
 
@@ -50,6 +51,7 @@ pub enum CellKind {
 struct Maze {
     geometry: super::Geometry,
     grid: Vec<CellKind>,
+    vertical_bias: f64,
 }
 
 #[derive(Debug)]
@@ -75,10 +77,11 @@ fn add_walls(walls: &mut Vec<Wall>, new_walls: Vec<Coord>) {
 }
 
 impl Maze {
-    fn new(g: &super::Geometry) -> Maze {
+    fn new(g: &super::Geometry, vertical_bias: f64) -> Maze {
         let mut m = Maze {
             geometry: g.clone(),
             grid: Vec::new(),
+            vertical_bias: vertical_bias,
         };
         m.grid.reserve(g.width * g.height);
         for _ in 0..(g.width * g.height) {
@@ -173,7 +176,14 @@ impl Maze {
         let d;
         let mut rng = thread_rng();
         if w.x % 2 == 0 && w.y % 2 == 0 {
-            d = rng.next_u32() % 4;
+            let f = rng.next_f64();
+            if f < self.vertical_bias {
+                println!("vertical");
+                d = rng.next_u32() % 2;
+            } else {
+                println!("horizontal");
+                d = 2 + rng.next_u32() % 2;
+            }
         } else if w.x % 2 == 0 {
             d = rng.next_u32() % 2;
         } else if w.y % 2 == 0 {
@@ -359,10 +369,13 @@ fn image_geometry<T: ?Sized + Rendering>(renderer: &T, g: &super::Geometry) -> s
     }
 }
 
-pub fn generate_image<T: ?Sized + Rendering>(path: &path::Path, g: super::Geometry, renderer: &T) {
+pub fn generate_image<T: ?Sized + Rendering>(path: &path::Path,
+                                             g: super::Geometry,
+                                             renderer: &T,
+                                             vertical_bias: f64) {
     let grid_geometry = grid_geometry(renderer, &g);
 
-    let mut maze = Maze::new(&grid_geometry);
+    let mut maze = Maze::new(&grid_geometry, vertical_bias);
 
     maze.randomized_prim();
 
@@ -376,18 +389,21 @@ const USAGE: &'static str = "
 Maze background generator.
 
 Usage: maze [options] FILE
-       maze -g GEOM FILE
        maze --geometry GEOM FILE
+       maze -g GEOM FILE
        maze --rendering=RENDERING FILE
        maze -r RENDERING FILE
+       maze --vertical-bias BIAS
+       maze -b BIAS
        maze -h | --help
        maze -v | --version
 
 Options:
-    -h, --help                 Show this message
-    -v, --version              Show the version
+    -h, --help                                    Show this message
+    -v, --version                                 Show the version
     -g=<WIDTHxHEIGHT>, --geometry=<WIDTHxHEIGHT>  Geometry of the image to generate [default: 100x100]
-    -r=RENDERING, --rendering=RENDERING      Rendering mode. Valid values are: plain, invaders, mosaic. [default: plain]
+    -r=RENDERING, --rendering=RENDERING           Rendering mode. Valid values are: plain, invaders, mosaic. [default: plain]
+    -b=BIAS, --vertical-bias=BIAS                 Vertical Bias. Larger than 0.5, the maze will then to be more vertical. Lower than 0.5, will tend to be more horizontal. [default: 0.5]
 ";
 
 
@@ -431,6 +447,19 @@ fn rendering_parse(rendering: &str) -> Box<maze::Rendering> {
     }
 }
 
+fn vertical_bias_parse(vertical_bias: &str) -> f64 {
+    let d = f64::from_str(vertical_bias)
+        .ok()
+        .expect("vertical_bias is not a floating number");
+
+    if d >= 1.0 {
+        panic!("vertical_bias is too large");
+    } else if d <= 0.0 {
+        panic!("vertical_bias is too small");
+    }
+    d
+}
+
 fn main() {
     let version = env!("CARGO_PKG_VERSION").to_owned();
     let args = Docopt::new(USAGE)
@@ -445,5 +474,8 @@ fn main() {
     let path = args.get_str("FILE");
     let path = path::Path::new(path);
 
-    maze::generate_image(path, geometry, &*rendering);
+    let vertical_bias = args.get_str("--vertical-bias");
+    let vertical_bias = vertical_bias_parse(&vertical_bias);
+
+    maze::generate_image(path, geometry, &*rendering, vertical_bias);
 }
