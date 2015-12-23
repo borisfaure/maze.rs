@@ -24,8 +24,6 @@ use image::{
 };
 use rand::{
     random,
-    Rng,
-    thread_rng,
 };
 
 #[derive(Debug)]
@@ -35,11 +33,6 @@ pub struct Coord {
 }
 type Path = Coord;
 type Wall = Coord;
-
-fn pop_random_wall(walls: &mut Vec<Wall>) -> Wall {
-    let pos: usize = random::<usize>() % walls.len();
-    walls.swap_remove(pos)
-}
 
 #[derive(Debug,Clone)]
 pub enum CellKind {
@@ -70,11 +63,42 @@ fn opposite(dir: &Direction) -> Direction {
     }
 }
 
-fn add_walls(walls: &mut Vec<Wall>, new_walls: Vec<Coord>) {
+fn add_walls(vwalls: &mut Vec<Wall>, hwalls: &mut Vec<Wall>, new_walls: Vec<Coord>) {
     for w in new_walls {
-        walls.push(w);
+        if w.x % 2 == 0 {
+            vwalls.push(w);
+        } else if w.y % 2 == 0 {
+            hwalls.push(w);
+        }
     }
 }
+
+fn pop_random_wall(vwalls: &mut Vec<Wall>,
+                   hwalls: &mut Vec<Wall>,
+                   vertical_bias: f64) -> Wall {
+    let r : usize = random::<usize>();
+    match (vwalls.len(), hwalls.len()) {
+        (0, len) => {
+            let pos = r % len;
+            hwalls.swap_remove(pos)
+        },
+        (len, 0) => {
+            let pos = r % len;
+            vwalls.swap_remove(pos)
+        },
+        (vlen, hlen) => {
+            let f = random::<f64>();
+            if f < vertical_bias {
+                let pos = r % vlen;
+                vwalls.swap_remove(pos)
+            } else {
+                let pos = r % hlen;
+                hwalls.swap_remove(pos)
+            }
+        }
+    }
+}
+
 
 impl Maze {
     fn new(g: &super::Geometry, vertical_bias: f64) -> Maze {
@@ -173,32 +197,20 @@ impl Maze {
     }
 
     fn get_random_wall_direction(&self, w: &Wall) -> Option<Direction> {
-        let d;
-        let mut rng = thread_rng();
-        if w.x % 2 == 0 && w.y % 2 == 0 {
-            let f = rng.next_f64();
-            if f < self.vertical_bias {
-                println!("vertical");
-                d = rng.next_u32() % 2;
-            } else {
-                println!("horizontal");
-                d = 2 + rng.next_u32() % 2;
+        if w.x % 2 == 0 {
+            match random::<u8>() % 2 {
+                0 => Some(Direction::Up),
+                _ => Some(Direction::Down),
             }
-        } else if w.x % 2 == 0 {
-            d = rng.next_u32() % 2;
         } else if w.y % 2 == 0 {
-            d = 2 + rng.next_u32() % 2;
+            match random::<u8>() % 2 {
+                0 => Some(Direction::Left),
+                _ => Some(Direction::Right),
+            }
         } else {
-            d = 4;
+            None
         }
 
-        match d {
-            0 => Some(Direction::Up),
-            1 => Some(Direction::Down),
-            2 => Some(Direction::Left),
-            3 => Some(Direction::Right),
-            _ => None,
-        }
     }
 
 /* Randomized Prim's algorithm
@@ -234,16 +246,17 @@ impl Maze {
  */
 
     fn randomized_prim(&mut self) {
-        let mut walls : Vec<Wall> = Vec::new();
+        let mut vwalls : Vec<Wall> = Vec::new();
+        let mut hwalls : Vec<Wall> = Vec::new();
         let start = Coord{x:0, y:0};
         self.set_path(&start);
         let new_walls = self.get_undefined_cells_around(&start);
         self.set_walls(&new_walls);
-        add_walls(&mut walls, new_walls);
+        add_walls(&mut vwalls, &mut hwalls, new_walls);
 
-        while !walls.is_empty() {
+        while !vwalls.is_empty() || !hwalls.is_empty() {
             /* Pick a random wall from the list */
-            let w = pop_random_wall(&mut walls);
+            let w = pop_random_wall(&mut vwalls, &mut hwalls, self.vertical_bias);
             if let Some(dir) = self.get_random_wall_direction(&w) {
                 let o1 = self.get_coord_next(&w as &Coord, &dir);
                 let o2 = self.get_coord_next(&w as &Coord, &opposite(&dir));
@@ -256,32 +269,43 @@ impl Maze {
                         self.set_path(&w);
                         self.set_path(&c2);
                         self.set_path(&c1);
-                        let new_walls = self.get_undefined_cells_around(&w);
-                        self.set_walls(&new_walls);
-                        let new_walls = self.get_undefined_cells_around(&c1);
-                        self.set_walls(&new_walls);
-                        add_walls(&mut walls, new_walls);
-                        let new_walls = self.get_undefined_cells_around(&c2);
-                        self.set_walls(&new_walls);
-                        add_walls(&mut walls, new_walls);
+
+                        let walls = self.get_undefined_cells_around(&w);
+                        self.set_walls(&walls);
+                        add_walls(&mut vwalls, &mut hwalls, walls);
+
+                        let walls = self.get_undefined_cells_around(&c1);
+                        self.set_walls(&walls);
+                        add_walls(&mut vwalls, &mut hwalls, walls);
+
+                        let walls = self.get_undefined_cells_around(&c2);
+                        self.set_walls(&walls);
+                        add_walls(&mut vwalls, &mut hwalls, walls);
                     },
                     (Some(c), _) => {
                         self.set_path(&w);
                         self.set_path(&c);
-                        let new_walls = self.get_undefined_cells_around(&w);
-                        self.set_walls(&new_walls);
-                        let new_walls = self.get_undefined_cells_around(&c);
-                        self.set_walls(&new_walls);
-                        add_walls(&mut walls, new_walls);
+
+                        let  walls = self.get_undefined_cells_around(&w);
+                        self.set_walls(&walls);
+                        add_walls(&mut vwalls, &mut hwalls, walls);
+
+                        let walls = self.get_undefined_cells_around(&c);
+                        self.set_walls(&walls);
+                        add_walls(&mut vwalls, &mut hwalls, walls);
+
                     },
                     (_, Some(c)) => {
                         self.set_path(&w);
                         self.set_path(&c);
-                        let new_walls = self.get_undefined_cells_around(&w);
-                        self.set_walls(&new_walls);
-                        let new_walls = self.get_undefined_cells_around(&c);
-                        self.set_walls(&new_walls);
-                        add_walls(&mut walls, new_walls);
+
+                        let walls = self.get_undefined_cells_around(&w);
+                        self.set_walls(&walls);
+                        add_walls(&mut vwalls, &mut hwalls, walls);
+
+                        let walls = self.get_undefined_cells_around(&c);
+                        self.set_walls(&walls);
+                        add_walls(&mut vwalls, &mut hwalls, walls);
                     },
                     (_, _) => {
                     }
