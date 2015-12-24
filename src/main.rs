@@ -6,7 +6,7 @@ mod invaders;
 mod mosaic;
 
 #[derive(Debug,Clone)]
-pub struct Geometry{
+pub struct Geometry {
     width: usize,
     height: usize,
 }
@@ -14,6 +14,11 @@ pub struct Geometry{
 use docopt::Docopt;
 use std::path;
 use std::str::FromStr;
+
+pub struct Origin {
+    x: f64,
+    y: f64,
+}
 
 mod maze {
 
@@ -45,6 +50,7 @@ struct Maze {
     geometry: super::Geometry,
     grid: Vec<CellKind>,
     vertical_bias: f64,
+    origin: super::Origin,
 }
 
 #[derive(Debug)]
@@ -101,11 +107,12 @@ fn pop_random_wall(vwalls: &mut Vec<Wall>,
 
 
 impl Maze {
-    fn new(g: &super::Geometry, vertical_bias: f64) -> Maze {
+    fn new(g: &super::Geometry, vertical_bias: f64, origin: super::Origin) -> Maze {
         let mut m = Maze {
             geometry: g.clone(),
             grid: Vec::new(),
             vertical_bias: vertical_bias,
+            origin: origin,
         };
         m.grid.reserve(g.width * g.height);
         for _ in 0..(g.width * g.height) {
@@ -210,7 +217,15 @@ impl Maze {
         } else {
             None
         }
+    }
 
+    fn origin_to_coord(&self) -> Coord {
+        let x = self.origin.x * (self.geometry.width as f64);
+        let y = self.origin.y * (self.geometry.height as f64);
+        Coord {
+            x: (x as usize) & !1,
+            y: (y as usize) & !1,
+        }
     }
 
 /* Randomized Prim's algorithm
@@ -248,7 +263,8 @@ impl Maze {
     fn randomized_prim(&mut self) {
         let mut vwalls : Vec<Wall> = Vec::new();
         let mut hwalls : Vec<Wall> = Vec::new();
-        let start = Coord{x:0, y:0};
+
+        let start = self.origin_to_coord();
         self.set_path(&start);
         let new_walls = self.get_undefined_cells_around(&start);
         self.set_walls(&new_walls);
@@ -396,10 +412,11 @@ fn image_geometry<T: ?Sized + Rendering>(renderer: &T, g: &super::Geometry) -> s
 pub fn generate_image<T: ?Sized + Rendering>(path: &path::Path,
                                              g: super::Geometry,
                                              renderer: &T,
-                                             vertical_bias: f64) {
+                                             vertical_bias: f64,
+                                             origin: super::Origin) {
     let grid_geometry = grid_geometry(renderer, &g);
 
-    let mut maze = Maze::new(&grid_geometry, vertical_bias);
+    let mut maze = Maze::new(&grid_geometry, vertical_bias, origin);
 
     maze.randomized_prim();
 
@@ -408,6 +425,7 @@ pub fn generate_image<T: ?Sized + Rendering>(path: &path::Path,
 }
 }
 
+/* CLI {{{ */
 
 const USAGE: &'static str = "
 Maze background generator.
@@ -417,8 +435,10 @@ Usage: maze [options] FILE
        maze -g GEOM FILE
        maze --rendering=RENDERING FILE
        maze -r RENDERING FILE
-       maze --vertical-bias BIAS
-       maze -b BIAS
+       maze --vertical-bias BIAS FILE
+       maze -b BIAS FILE
+       maze -o ORIGIN FILE
+       maze --origin ORIGIN FILE
        maze -h | --help
        maze -v | --version
 
@@ -428,6 +448,7 @@ Options:
     -g=<WIDTHxHEIGHT>, --geometry=<WIDTHxHEIGHT>  Geometry of the image to generate [default: 100x100]
     -r=RENDERING, --rendering=RENDERING           Rendering mode. Valid values are: plain, invaders, mosaic. [default: plain]
     -b=BIAS, --vertical-bias=BIAS                 Vertical Bias. Larger than 0.5, the maze will then to be more vertical. Lower than 0.5, will tend to be more horizontal. [default: 0.5]
+    -o=ORIGIN, --origin=ORIGIN                    Relative origin of the maze in floating point coordinates. Middle is 0.5x0.5. [default: 0.0x0.0]
 ";
 
 
@@ -484,6 +505,20 @@ fn vertical_bias_parse(vertical_bias: &str) -> f64 {
     d
 }
 
+fn origin_parse(origin: &str) -> Origin {
+    let origin: Vec<&str> = origin.split('x').collect();
+    if origin.len() != 2 {
+        panic!("invalid geometry");
+    }
+    let x : f64 = origin[0].parse()
+        .ok()
+        .expect("invalid origin");
+    let y : f64 = origin[1].parse()
+        .ok()
+        .expect("invalid origin");
+    Origin{x: x, y: y}
+}
+
 fn main() {
     let version = env!("CARGO_PKG_VERSION").to_owned();
     let args = Docopt::new(USAGE)
@@ -501,5 +536,11 @@ fn main() {
     let vertical_bias = args.get_str("--vertical-bias");
     let vertical_bias = vertical_bias_parse(&vertical_bias);
 
-    maze::generate_image(path, geometry, &*rendering, vertical_bias);
+    let origin = args.get_str("--origin");
+    let origin = origin_parse(&origin);
+
+    maze::generate_image(path, geometry, &*rendering, vertical_bias,
+                         origin);
 }
+
+/* }}} */
