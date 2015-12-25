@@ -9,8 +9,9 @@ use rand::distributions::{
     Range
 };
 use maze::{
-    Coord,
     CellKind,
+    Coord,
+    Maze,
     Rendering,
 };
 
@@ -79,8 +80,8 @@ impl Rendering for RendererMosaic {
     fn tile_size(&self) -> usize {
         TILE_SIZE as usize
     }
-    fn draw_cell(&self, img: &mut RgbImage, c: &Coord,
-                        cell_kind: CellKind) {
+    fn draw_cell(&self, _maze: &Maze, img: &mut RgbImage, c: &Coord,
+                 cell_kind: CellKind) {
         match cell_kind {
             CellKind::PathKind(_) => {
                 if self.is_inverted {

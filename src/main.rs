@@ -2,6 +2,7 @@ extern crate docopt;
 extern crate image;
 extern crate rand;
 
+mod plain;
 mod invaders;
 mod mosaic;
 
@@ -26,7 +27,6 @@ mod maze {
 use std::path;
 use image::{
     RgbImage,
-    Rgb
 };
 use rand::{
     random,
@@ -47,7 +47,7 @@ pub enum CellKind {
     Undefined
 }
 
-struct Maze {
+pub struct Maze {
     geometry: super::Geometry,
     grid: Vec<CellKind>,
     vertical_bias: f64,
@@ -347,7 +347,7 @@ impl Maze {
         for y in 0..self.geometry.height {
             for x in 0..self.geometry.width {
                 let c = Coord{x: x, y: y};
-                renderer.draw_cell(&mut img, &c, self.cell_kind(&c));
+                renderer.draw_cell(&self, &mut img, &c, self.cell_kind(&c));
             }
         }
         img
@@ -355,46 +355,12 @@ impl Maze {
 }
 
 
-pub fn draw_cell_plain<T: Rendering>(renderer: &T, img: &mut RgbImage,
-                                     c: &Coord, p: &Rgb<u8>) {
-    let tile_size = renderer.tile_size();
-    for i in 0..tile_size {
-        for j in 0..tile_size {
-            img.put_pixel((c.x * tile_size + i) as u32,
-                          (c.y * tile_size + j) as u32,
-                          *p);
-        }
-    }
-}
-
 pub trait Rendering {
     fn tile_size(&self) -> usize;
-    fn draw_cell(&self, &mut RgbImage, &Coord, CellKind);
+    fn draw_cell(&self, &Maze, &mut RgbImage, &Coord, CellKind);
 }
 
 
-pub struct RendererPlain{
-    pub path_color: Rgb<u8>,
-    pub wall_color: Rgb<u8>,
-}
-impl Rendering for RendererPlain{
-    fn tile_size(&self) -> usize {
-        4
-    }
-    fn draw_cell(&self, img: &mut RgbImage, c: &Coord,
-                        cell_kind: CellKind) {
-        match cell_kind {
-            CellKind::PathKind(_) => {
-                draw_cell_plain(self, img, c, &self.path_color)
-            },
-            CellKind::WallKind => {
-                draw_cell_plain(self, img, c, &self.wall_color);
-            },
-            _ => {
-            }
-        }
-    }
-}
 
 fn grid_geometry<T: ?Sized + Rendering>(renderer: &T, g: &super::Geometry) -> super::Geometry {
     let tile_size = renderer.tile_size();
@@ -473,7 +439,7 @@ fn geometry_parse(geometry: &str) -> Geometry {
 fn rendering_parse(rendering: &str) -> Box<maze::Rendering> {
     match rendering {
         "plain" => {
-            Box::new(maze::RendererPlain {
+            Box::new(plain::RendererPlain {
                 path_color: image::Rgb{data:[253, 246, 227]},
                 wall_color: image::Rgb{data:[  7,  54,  66]},
             })
