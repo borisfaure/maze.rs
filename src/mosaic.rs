@@ -82,7 +82,7 @@ impl Rendering for RendererMosaic {
     fn draw_cell(&self, img: &mut RgbImage, c: &Coord,
                         cell_kind: CellKind) {
         match cell_kind {
-            CellKind::PathKind => {
+            CellKind::PathKind(_) => {
                 if self.is_inverted {
                     draw_tile_rand(img,
                                    c.x as u32 * TILE_SIZE,

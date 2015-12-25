@@ -15,6 +15,7 @@ use docopt::Docopt;
 use std::path;
 use std::str::FromStr;
 
+#[derive(Debug)]
 pub struct Origin {
     x: f64,
     y: f64,
@@ -42,7 +43,7 @@ type Wall = Coord;
 #[derive(Debug,Clone)]
 pub enum CellKind {
     WallKind,
-    PathKind,
+    PathKind(usize),
     Undefined
 }
 
@@ -129,11 +130,11 @@ impl Maze {
         }
     }
 
-    fn set_path(&mut self, c: &Coord) {
-        if let CellKind::PathKind = self.cell_kind(&c) {
+    fn set_path(&mut self, c: &Coord, d: usize) {
+        if let CellKind::PathKind(_) = self.cell_kind(&c) {
             return;
         }
-        self.grid[c.y * self.geometry.width + c.x] = CellKind::PathKind;
+        self.grid[c.y * self.geometry.width + c.x] = CellKind::PathKind(d);
     }
 
     fn set_wall(&mut self, c: &Coord) {
@@ -265,7 +266,7 @@ impl Maze {
         let mut hwalls : Vec<Wall> = Vec::new();
 
         let start = self.origin_to_coord();
-        self.set_path(&start);
+        self.set_path(&start, 0);
         let new_walls = self.get_undefined_cells_around(&start);
         self.set_walls(&new_walls);
         add_walls(&mut vwalls, &mut hwalls, new_walls);
@@ -278,50 +279,52 @@ impl Maze {
                 let o2 = self.get_coord_next(&w as &Coord, &opposite(&dir));
                 match (o1, o2) {
                     (Some(c1), Some(c2)) => {
-                        if let (CellKind::PathKind, CellKind::PathKind)
-                            = (self.cell_kind(&c1), self.cell_kind(&c2)) {
+                        if let CellKind::PathKind(d) = self.cell_kind(&c1) {
+                            if let CellKind::PathKind(_) = self.cell_kind(&c2) {
                                 continue;
+                            }
+                            self.set_path(&w, d+1);
+                            if let CellKind::Undefined = self.cell_kind(&c2) {
+                                self.set_path(&c2, d+2);
+
+                                let walls = self.get_undefined_cells_around(&c2);
+                                self.set_walls(&walls);
+                                add_walls(&mut vwalls, &mut hwalls, walls);
+                            }
+                            let walls = self.get_undefined_cells_around(&w);
+                            self.set_walls(&walls);
+                            add_walls(&mut vwalls, &mut hwalls, walls);
+                        } else if let CellKind::PathKind(d) = self.cell_kind(&c2) {
+                            self.set_path(&w, d+1);
+                            if let CellKind::Undefined = self.cell_kind(&c1) {
+                                self.set_path(&c1, d+2);
+
+                                let walls = self.get_undefined_cells_around(&c1);
+                                self.set_walls(&walls);
+                                add_walls(&mut vwalls, &mut hwalls, walls);
+                            }
+                            let walls = self.get_undefined_cells_around(&w);
+                            self.set_walls(&walls);
+                            add_walls(&mut vwalls, &mut hwalls, walls);
                         }
-                        self.set_path(&w);
-                        self.set_path(&c2);
-                        self.set_path(&c1);
-
-                        let walls = self.get_undefined_cells_around(&w);
-                        self.set_walls(&walls);
-                        add_walls(&mut vwalls, &mut hwalls, walls);
-
-                        let walls = self.get_undefined_cells_around(&c1);
-                        self.set_walls(&walls);
-                        add_walls(&mut vwalls, &mut hwalls, walls);
-
-                        let walls = self.get_undefined_cells_around(&c2);
-                        self.set_walls(&walls);
-                        add_walls(&mut vwalls, &mut hwalls, walls);
                     },
                     (Some(c), _) => {
-                        self.set_path(&w);
-                        self.set_path(&c);
+                        if let CellKind::PathKind(d) = self.cell_kind(&c) {
+                            self.set_path(&w, d+1);
 
-                        let  walls = self.get_undefined_cells_around(&w);
-                        self.set_walls(&walls);
-                        add_walls(&mut vwalls, &mut hwalls, walls);
-
-                        let walls = self.get_undefined_cells_around(&c);
-                        self.set_walls(&walls);
-                        add_walls(&mut vwalls, &mut hwalls, walls);
-
+                            let walls = self.get_undefined_cells_around(&w);
+                            self.set_walls(&walls);
+                            add_walls(&mut vwalls, &mut hwalls, walls);
+                        }
                     },
                     (_, Some(c)) => {
-                        self.set_path(&w);
-                        self.set_path(&c);
+                        if let CellKind::PathKind(d) = self.cell_kind(&c) {
+                            self.set_path(&w, d+1);
 
-                        let walls = self.get_undefined_cells_around(&w);
-                        self.set_walls(&walls);
-                        add_walls(&mut vwalls, &mut hwalls, walls);
-
-                        let walls = self.get_undefined_cells_around(&c);
-                        self.set_walls(&walls);
-                        add_walls(&mut vwalls, &mut hwalls, walls);
+                            let walls = self.get_undefined_cells_around(&w);
+                            self.set_walls(&walls);
+                            add_walls(&mut vwalls, &mut hwalls, walls);
+                        }
                     },
                     (_, _) => {
                     }
@@ -381,7 +384,7 @@ impl Rendering for RendererPlain{
     fn draw_cell(&self, img: &mut RgbImage, c: &Coord,
                         cell_kind: CellKind) {
         match cell_kind {
-            CellKind::PathKind => {
+            CellKind::PathKind(_) => {
                 draw_cell_plain(self, img, c, &self.path_color)
             },
             CellKind::WallKind => {

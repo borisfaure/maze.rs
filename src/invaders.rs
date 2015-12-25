@@ -60,7 +60,7 @@ impl Rendering for RendererInvaders{
     fn draw_cell(&self, img: &mut RgbImage, c: &Coord,
                         cell_kind: CellKind) {
         match cell_kind {
-            CellKind::PathKind => {
+            CellKind::PathKind(_) => {
                 self.draw_invader(img, c)
             },
             CellKind::WallKind => {
