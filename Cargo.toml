@@ -7,7 +7,7 @@ license = "BSD-2-Clause"
 [dependencies]
 docopt = "*"
 rand = "*"
-image = "*"
-debug_macros = {path = "/home/billiob/dev/rust/debug_macros/"}
-color_scaling = {path = "/home/billiob/dev/rust/color_scaling/"}
+color_scaling = "*"
+image = "0.6"
+debug_macros = "*"
 read_color = "*"
