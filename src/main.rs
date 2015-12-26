@@ -40,7 +40,7 @@ use rand::{
     random,
 };
 
-#[derive(Debug)]
+#[derive(Debug,Clone)]
 pub struct Coord {
     pub x: usize,
     pub y: usize,
@@ -51,16 +51,8 @@ type Wall = Coord;
 #[derive(Debug,Clone)]
 pub enum CellKind {
     WallKind,
-    PathKind(usize),
+    PathKind(f64),
     Undefined
-}
-
-pub struct Maze {
-    geometry: super::Geometry,
-    grid: Vec<CellKind>,
-    vertical_bias: f64,
-    origin: super::Origin,
-    len: usize,
 }
 
 #[derive(Debug)]
@@ -116,24 +108,50 @@ fn pop_random_wall(vwalls: &mut Vec<Wall>,
 }
 
 
+pub struct Maze {
+    geometry: super::Geometry,
+    grid: Vec<CellKind>,
+    vertical_bias: f64,
+    origin: Coord,
+    end: Coord,
+    len: f64,
+}
+
 impl Maze {
-    fn new(g: &super::Geometry, vertical_bias: f64, origin: super::Origin) -> Maze {
+    fn new(g: &super::Geometry, vertical_bias: f64, origin: &super::Origin) -> Maze {
         let mut m = Maze {
             geometry: g.clone(),
             grid: Vec::new(),
             vertical_bias: vertical_bias,
-            origin: origin,
-            len: 0,
+            origin: Coord{x: 0, y: 0},
+            len: 0_f64,
+            end: Coord{x: g.width-1 , y: g.height-1},
         };
         m.grid.reserve(g.width * g.height);
         for _ in 0..(g.width * g.height) {
             m.grid.push(CellKind::Undefined);
         }
+        m.origin = m.origin_to_coord(origin);
         m
     }
 
-    pub fn len(&self) -> usize {
+    pub fn origin(&self) -> Coord {
+        self.origin.clone()
+    }
+    pub fn end(&self) -> Coord {
+        self.end.clone()
+    }
+    pub fn len(&self) -> f64 {
         self.len
+    }
+
+    fn origin_to_coord(&self, origin: &super::Origin) -> Coord {
+        let x = origin.x * (self.geometry.width as f64);
+        let y = origin.y * (self.geometry.height as f64);
+        Coord {
+            x: (x as usize) & !1,
+            y: (y as usize) & !1,
+        }
     }
 
     fn cell_kind(&self, c: &Coord) -> CellKind {
@@ -144,7 +162,7 @@ impl Maze {
         }
     }
 
-    fn set_path(&mut self, c: &Coord, d: usize) {
+    fn set_path(&mut self, c: &Coord, d: f64) {
         if let CellKind::PathKind(_) = self.cell_kind(&c) {
             return;
         }
@@ -234,15 +252,6 @@ impl Maze {
         }
     }
 
-    fn origin_to_coord(&self) -> Coord {
-        let x = self.origin.x * (self.geometry.width as f64);
-        let y = self.origin.y * (self.geometry.height as f64);
-        Coord {
-            x: (x as usize) & !1,
-            y: (y as usize) & !1,
-        }
-    }
-
 /* Randomized Prim's algorithm
  *
  * This algorithm is a randomized version of Prim's algorithm.
@@ -279,8 +288,8 @@ impl Maze {
         let mut vwalls : Vec<Wall> = Vec::new();
         let mut hwalls : Vec<Wall> = Vec::new();
 
-        let start = self.origin_to_coord();
-        self.set_path(&start, 0);
+        let start = self.origin();
+        self.set_path(&start, 0.0_f64);
         let new_walls = self.get_undefined_cells_around(&start);
         self.set_walls(&new_walls);
         add_walls(&mut vwalls, &mut hwalls, new_walls);
@@ -297,70 +306,76 @@ impl Maze {
                             if let CellKind::PathKind(_) = self.cell_kind(&c2) {
                                 continue;
                             }
-                            self.set_path(&w, d+1);
+                            self.set_path(&w, d + 1_f64);
                             if let CellKind::Undefined = self.cell_kind(&c2) {
-                                self.set_path(&c2, d+2);
+                                self.set_path(&c2, d + 2_f64);
 
                                 let walls = self.get_undefined_cells_around(&c2);
                                 self.set_walls(&walls);
                                 add_walls(&mut vwalls, &mut hwalls, walls);
 
-                                if self.len < d+2 {
-                                    self.len = d+2
+                                if self.len < d + 2_f64 {
+                                    self.len = d + 2_f64;
+                                    self.end = c2;
                                 }
                             }
                             let walls = self.get_undefined_cells_around(&w);
                             self.set_walls(&walls);
                             add_walls(&mut vwalls, &mut hwalls, walls);
 
-                            if self.len < d+1 {
-                                self.len = d+1
+                            if self.len < d + 1_f64 {
+                                self.len = d + 1_f64;
+                                self.end = w;
                             }
                         } else if let CellKind::PathKind(d) = self.cell_kind(&c2) {
-                            self.set_path(&w, d+1);
+                            self.set_path(&w, d + 1_f64);
                             if let CellKind::Undefined = self.cell_kind(&c1) {
-                                self.set_path(&c1, d+2);
+                                self.set_path(&c1, d + 2_f64);
 
                                 let walls = self.get_undefined_cells_around(&c1);
                                 self.set_walls(&walls);
                                 add_walls(&mut vwalls, &mut hwalls, walls);
 
-                                if self.len < d+2 {
-                                    self.len = d+2
+                                if self.len < d + 2_f64 {
+                                    self.len = d + 2_f64;
+                                    self.end = c1;
                                 }
                             }
                             let walls = self.get_undefined_cells_around(&w);
                             self.set_walls(&walls);
                             add_walls(&mut vwalls, &mut hwalls, walls);
 
-                            if self.len < d+1 {
-                                self.len = d+1
+                            if self.len < d + 1_f64 {
+                                self.len = d + 1_f64;
+                                self.end = w;
                             }
                         }
                     },
                     (Some(c), _) => {
                         if let CellKind::PathKind(d) = self.cell_kind(&c) {
-                            self.set_path(&w, d+1);
+                            self.set_path(&w, d + 1_f64);
 
                             let walls = self.get_undefined_cells_around(&w);
                             self.set_walls(&walls);
                             add_walls(&mut vwalls, &mut hwalls, walls);
 
-                            if self.len < d+1 {
-                                self.len = d+1
+                            if self.len < d + 1_f64 {
+                                self.len = d + 1_f64;
+                                self.end = w;
                             }
                         }
                     },
                     (_, Some(c)) => {
                         if let CellKind::PathKind(d) = self.cell_kind(&c) {
-                            self.set_path(&w, d+1);
+                            self.set_path(&w, d + 1_f64);
 
                             let walls = self.get_undefined_cells_around(&w);
                             self.set_walls(&walls);
                             add_walls(&mut vwalls, &mut hwalls, walls);
 
-                            if self.len < d+1 {
-                                self.len = d+1
+                            if self.len < d + 1_f64 {
+                                self.len = d + 1_f64;
+                                self.end = w;
                             }
                         }
                     },
@@ -373,6 +388,14 @@ impl Maze {
             for x in (0..self.geometry.width).filter(|&v| v % 2 == 1) {
                 if let CellKind::Undefined= self.cell_kind(&Coord{x:x, y:y}) {
                     self.grid[y * self.geometry.width + x] = CellKind::WallKind;
+                }
+            }
+        }
+        for y in 0..self.geometry.height {
+            for x in 0..self.geometry.width {
+                if let CellKind::PathKind(f) = self.cell_kind(&Coord{x:x, y:y}) {
+                    self.grid[y * self.geometry.width + x] =
+                        CellKind::PathKind(f / self.len);
                 }
             }
         }
@@ -423,11 +446,12 @@ pub fn generate_image<T: ?Sized + Rendering>(path: &path::Path,
                                              origin: super::Origin) {
     let grid_geometry = grid_geometry(renderer, &g);
 
-    let mut maze = Maze::new(&grid_geometry, vertical_bias, origin);
+    let mut maze = Maze::new(&grid_geometry, vertical_bias, &origin);
 
     maze.randomized_prim();
 
-    dbg!("{}", maze.len());
+    dbg!("On grid {:?}, from {:?} to {:?} (len: {})",
+        grid_geometry, maze.origin(), maze.end(), maze.len().ceil());
 
     let img = maze.draw(renderer);
     let _ = img.save(path);

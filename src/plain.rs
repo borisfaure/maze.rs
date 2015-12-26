@@ -31,20 +31,14 @@ impl Rendering for RendererPlain {
     fn tile_size(&self) -> usize {
         4
     }
-    fn draw_cell(&self, maze: &Maze, img: &mut RgbImage, c: &Coord,
+    fn draw_cell(&self, _maze: &Maze, img: &mut RgbImage, c: &Coord,
                  cell_kind: CellKind) {
         match cell_kind {
-            CellKind::PathKind(d) => {
-                let l = maze.len();
-                if l != 0 {
-                    let f: f64 = (d as f64) / (l as f64);
-                    let color = scale_rgb(&self.path_color_start,
-                                          &self.path_color_end,
-                                          f).unwrap();
-                    draw_cell_plain(self, img, c, &color);
-                } else {
-                    draw_cell_plain(self, img, c, &self.path_color_start);
-                }
+            CellKind::PathKind(f) => {
+                let color = scale_rgb(&self.path_color_start,
+                                      &self.path_color_end,
+                                      f).unwrap();
+                draw_cell_plain(self, img, c, &color);
             },
             CellKind::WallKind => {
                 draw_cell_plain(self, img, c, &self.wall_color);
