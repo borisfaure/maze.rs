@@ -4,6 +4,7 @@ extern crate rand;
 #[macro_use]
 extern crate debug_macros;
 extern crate color_scaling;
+extern crate read_color;
 
 mod plain;
 mod invaders;
@@ -24,6 +25,10 @@ pub struct Origin {
     x: f64,
     y: f64,
 }
+
+use image::{
+    Rgb,
+};
 
 mod maze {
 
@@ -443,6 +448,8 @@ Usage: maze [options] FILE
        maze -b BIAS FILE
        maze -o ORIGIN FILE
        maze --origin ORIGIN FILE
+       maze --foreground COLOR FILE
+       maze --background COLOR FILE
        maze -h | --help
        maze -v | --version
 
@@ -453,6 +460,8 @@ Options:
     -r=RENDERING, --rendering=RENDERING           Rendering mode. Valid values are: plain, invaders, mosaic. [default: plain]
     -b=BIAS, --vertical-bias=BIAS                 Vertical Bias. Larger than 0.5, the maze will then to be more vertical. Lower than 0.5, will tend to be more horizontal. [default: 0.5]
     -o=ORIGIN, --origin=ORIGIN                    Relative origin of the maze in floating point coordinates. Middle is 0.5x0.5. [default: 0.0x0.0]
+    --background=COLOR                            Background color. [default: #073642]
+    --foreground=COLOR                            Foreground color(s). Either one or two colors (\"#ffffff\" or \"#ffffff #ff00ff\"). [default: #d70000 #ffffd7]
 ";
 
 
@@ -471,19 +480,20 @@ fn geometry_parse(geometry: &str) -> Geometry {
     Geometry{width: width, height: height}
 }
 
-fn rendering_parse(rendering: &str) -> Box<maze::Rendering> {
+fn rendering_parse(rendering: &str, bg: Rgb<u8>, fg: [Rgb<u8>; 2])
+    -> Box<maze::Rendering> {
     match rendering {
         "plain" => {
             Box::new(plain::RendererPlain {
-                path_color_start: image::Rgb{data:[220,  50,  47]},
-                path_color_end: image::Rgb{data:[253, 246, 227]},
-                wall_color: image::Rgb{data:[  7,  54,  66]},
+                path_color_start: fg[0],
+                path_color_end: fg[1],
+                wall_color: bg,
             })
         },
         "invaders" => {
             Box::new(invaders::RendererInvaders{
-                invader_color:    image::Rgb{data:[253, 246, 227]},
-                wall_color: image::Rgb{data:[  7,  54,  66]},
+                invader_color: fg[0],
+                wall_color: bg,
             })
         },
         "mosaic" => {
@@ -524,6 +534,47 @@ fn origin_parse(origin: &str) -> Origin {
     Origin{x: x, y: y}
 }
 
+fn color_parse(color: &str) -> Rgb<u8> {
+    let c = &mut color.chars();
+    match c.next() {
+        None => {
+            panic!("invalid color {}", color);
+        },
+        Some(x) if x != '#' => {
+            panic!("invalid color {}", color);
+        },
+        _ => {
+        }
+    }
+    match read_color::rgb(c) {
+        None => {
+            panic!("invalid color {}", color);
+        },
+        Some(d) => {
+            Rgb{data: d}
+        }
+    }
+}
+
+fn colors_parse(bg: &str, fg: &str) -> (Rgb<u8>, [Rgb<u8>; 2]) {
+    let bg = color_parse(bg);
+
+    let vec_str : Vec<&str> = fg.split(' ').collect();
+    if vec_str.len() > 2 {
+        panic!("invalid colors '{}'", fg);
+    }
+    let fg1 = color_parse(vec_str[0]);
+    let fg2 = {
+        if vec_str.len() > 1 {
+            color_parse(vec_str[1])
+        } else {
+            fg1.clone() as Rgb<u8>
+        }
+    };
+
+    (bg, [fg1, fg2])
+}
+
 fn main() {
     let version = env!("CARGO_PKG_VERSION").to_owned();
     let args = Docopt::new(USAGE)
@@ -532,8 +583,11 @@ fn main() {
     let geometry = args.get_str("--geometry");
     let geometry = geometry_parse(&geometry);
 
+    let (bg, fg) = colors_parse(args.get_str("--background"),
+                                args.get_str("--foreground"));
+
     let rendering = args.get_str("--rendering");
-    let rendering = rendering_parse(&rendering);
+    let rendering = rendering_parse(&rendering, bg, fg);
 
     let path = args.get_str("FILE");
     let path = path::Path::new(path);

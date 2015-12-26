@@ -10,3 +10,4 @@ rand = "*"
 image = "*"
 debug_macros = {path = "/home/billiob/dev/rust/debug_macros/"}
 color_scaling = {path = "/home/billiob/dev/rust/color_scaling/"}
+read_color = "*"
