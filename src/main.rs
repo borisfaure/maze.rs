@@ -1,6 +1,9 @@
 extern crate docopt;
 extern crate image;
 extern crate rand;
+#[macro_use]
+extern crate debug_macros;
+extern crate color_scaling;
 
 mod plain;
 mod invaders;
@@ -52,6 +55,7 @@ pub struct Maze {
     grid: Vec<CellKind>,
     vertical_bias: f64,
     origin: super::Origin,
+    len: usize,
 }
 
 #[derive(Debug)]
@@ -114,12 +118,17 @@ impl Maze {
             grid: Vec::new(),
             vertical_bias: vertical_bias,
             origin: origin,
+            len: 0,
         };
         m.grid.reserve(g.width * g.height);
         for _ in 0..(g.width * g.height) {
             m.grid.push(CellKind::Undefined);
         }
         m
+    }
+
+    pub fn len(&self) -> usize {
+        self.len
     }
 
     fn cell_kind(&self, c: &Coord) -> CellKind {
@@ -290,10 +299,18 @@ impl Maze {
                                 let walls = self.get_undefined_cells_around(&c2);
                                 self.set_walls(&walls);
                                 add_walls(&mut vwalls, &mut hwalls, walls);
+
+                                if self.len < d+2 {
+                                    self.len = d+2
+                                }
                             }
                             let walls = self.get_undefined_cells_around(&w);
                             self.set_walls(&walls);
                             add_walls(&mut vwalls, &mut hwalls, walls);
+
+                            if self.len < d+1 {
+                                self.len = d+1
+                            }
                         } else if let CellKind::PathKind(d) = self.cell_kind(&c2) {
                             self.set_path(&w, d+1);
                             if let CellKind::Undefined = self.cell_kind(&c1) {
@@ -302,10 +319,18 @@ impl Maze {
                                 let walls = self.get_undefined_cells_around(&c1);
                                 self.set_walls(&walls);
                                 add_walls(&mut vwalls, &mut hwalls, walls);
+
+                                if self.len < d+2 {
+                                    self.len = d+2
+                                }
                             }
                             let walls = self.get_undefined_cells_around(&w);
                             self.set_walls(&walls);
                             add_walls(&mut vwalls, &mut hwalls, walls);
+
+                            if self.len < d+1 {
+                                self.len = d+1
+                            }
                         }
                     },
                     (Some(c), _) => {
@@ -315,6 +340,10 @@ impl Maze {
                             let walls = self.get_undefined_cells_around(&w);
                             self.set_walls(&walls);
                             add_walls(&mut vwalls, &mut hwalls, walls);
+
+                            if self.len < d+1 {
+                                self.len = d+1
+                            }
                         }
                     },
                     (_, Some(c)) => {
@@ -324,6 +353,10 @@ impl Maze {
                             let walls = self.get_undefined_cells_around(&w);
                             self.set_walls(&walls);
                             add_walls(&mut vwalls, &mut hwalls, walls);
+
+                            if self.len < d+1 {
+                                self.len = d+1
+                            }
                         }
                     },
                     (_, _) => {
@@ -389,6 +422,8 @@ pub fn generate_image<T: ?Sized + Rendering>(path: &path::Path,
 
     maze.randomized_prim();
 
+    dbg!("{}", maze.len());
+
     let img = maze.draw(renderer);
     let _ = img.save(path);
 }
@@ -440,7 +475,8 @@ fn rendering_parse(rendering: &str) -> Box<maze::Rendering> {
     match rendering {
         "plain" => {
             Box::new(plain::RendererPlain {
-                path_color: image::Rgb{data:[253, 246, 227]},
+                path_color_start: image::Rgb{data:[220,  50,  47]},
+                path_color_end: image::Rgb{data:[253, 246, 227]},
                 wall_color: image::Rgb{data:[  7,  54,  66]},
             })
         },
