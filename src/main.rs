@@ -55,6 +55,11 @@ pub enum CellKind {
     Undefined
 }
 
+pub enum Gradient {
+    Length,
+    Solution,
+}
+
 #[derive(Debug)]
 enum Direction {
     Up,
@@ -413,6 +418,85 @@ impl Maze {
         }
         img
     }
+
+    fn clear_path(&mut self) {
+        for y in 0..self.geometry.height {
+            for x in 0..self.geometry.width {
+                if let CellKind::PathKind(_) = self.cell_kind(&Coord{x:x, y:y}) {
+                    self.grid[y * self.geometry.width + x] =
+                        CellKind::PathKind(-1_f64);
+                }
+            }
+        }
+    }
+
+    fn mark_as_visited(&mut self, c: &Coord) {
+        if let CellKind::PathKind(_) = self.cell_kind(c) {
+            self.grid[c.y * self.geometry.width + c.x] =
+                CellKind::PathKind(0_f64);
+        }
+    }
+
+    fn is_visited(&self, c: &Coord) -> Option<bool> {
+        if let CellKind::PathKind(f) = self.cell_kind(c) {
+            if f == -1_f64 {
+                Some(false)
+            } else {
+                Some(true)
+            }
+        } else {
+            None
+        }
+    }
+
+    fn walk(&self, start: &Coord) -> Option<(Coord, Direction)> {
+        let dirs = vec![Direction::Up, Direction::Down,
+                        Direction::Left, Direction::Right];
+        for d in dirs {
+            if let Some(c) = self.get_coord_next(start, &d) {
+                match self.is_visited(&c) {
+                    Some(b) if !b => {
+                        return Some((c, d));
+                    },
+                    _ => {
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    fn compute_solution(&mut self) {
+        self.clear_path();
+        let mut sol : Vec<(Coord, Direction)> = Vec::new();
+        let mut c = self.origin.clone();
+        self.mark_as_visited(&c);
+        loop {
+            match self.walk(&c) {
+                Some((next, direction)) => {
+                    self.mark_as_visited(&next);
+                    if (next.x, next.y) == (self.end.x, self.end.y) {
+                        break;
+                    }
+                    sol.push((c, direction));
+                    c = next.clone();
+                },
+                None => {
+                    match sol.pop() {
+                        Some((next, _)) => {
+                            c = next.clone();
+                        },
+                        None => {
+                        }
+                    }
+                }
+            }
+        }
+        /* compute lengths */
+        for (c, dir) in sol {
+            println!("{:?}", (c, dir));
+        }
+    }
 }
 
 
@@ -443,7 +527,8 @@ pub fn generate_image<T: ?Sized + Rendering>(path: &path::Path,
                                              g: super::Geometry,
                                              renderer: &T,
                                              vertical_bias: f64,
-                                             origin: super::Origin) {
+                                             origin: super::Origin,
+                                             gradient: Option<Gradient>) {
     let grid_geometry = grid_geometry(renderer, &g);
 
     let mut maze = Maze::new(&grid_geometry, vertical_bias, &origin);
@@ -452,6 +537,10 @@ pub fn generate_image<T: ?Sized + Rendering>(path: &path::Path,
 
     dbg!("On grid {:?}, from {:?} to {:?} (len: {})",
         grid_geometry, maze.origin(), maze.end(), maze.len().ceil());
+
+    if let Some(Gradient::Solution) = gradient {
+        maze.compute_solution();
+    }
 
     let img = maze.draw(renderer);
     let _ = img.save(path);
@@ -474,6 +563,7 @@ Usage: maze [options] FILE
        maze --origin ORIGIN FILE
        maze --foreground COLOR FILE
        maze --background COLOR FILE
+       maze --gradient GRADIENT FILE
        maze -h | --help
        maze -v | --version
 
@@ -486,6 +576,7 @@ Options:
     -o=ORIGIN, --origin=ORIGIN                    Relative origin of the maze in floating point coordinates. Middle is 0.5x0.5. [default: 0.0x0.0]
     --background=COLOR                            Background color. [default: #073642]
     --foreground=COLOR                            Foreground color(s). Either one or two colors (\"#ffffff\" or \"#ffffff #ff00ff\"). [default: #d70000 #ffffd7]
+    --gradient=ALGORITHM                          If 2 foreground colors, define how to do the gradient. Valid values are: length, solution. [default: length]
 ";
 
 
@@ -580,6 +671,20 @@ fn color_parse(color: &str) -> Rgb<u8> {
     }
 }
 
+fn gradient_parse(g: &str) -> Option<maze::Gradient> {
+    match g {
+        "length" => {
+            Some(maze::Gradient::Length)
+        },
+        "solution" => {
+            Some(maze::Gradient::Solution)
+        },
+        _ => {
+            None
+        }
+    }
+}
+
 fn colors_parse(bg: &str, fg: &str) -> (Rgb<u8>, [Rgb<u8>; 2]) {
     let bg = color_parse(bg);
 
@@ -622,8 +727,11 @@ fn main() {
     let origin = args.get_str("--origin");
     let origin = origin_parse(&origin);
 
+    let gradient = args.get_str("--gradient");
+    let gradient = gradient_parse(&gradient);
+
     maze::generate_image(path, geometry, &*rendering, vertical_bias,
-                         origin);
+                         origin, gradient);
 }
 
 /* }}} */
