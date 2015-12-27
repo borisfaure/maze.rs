@@ -430,10 +430,10 @@ impl Maze {
         }
     }
 
-    fn mark_as_visited(&mut self, c: &Coord) {
+    fn mark_as_visited(&mut self, c: &Coord, f: f64) {
         if let CellKind::PathKind(_) = self.cell_kind(c) {
             self.grid[c.y * self.geometry.width + c.x] =
-                CellKind::PathKind(0_f64);
+                CellKind::PathKind(f);
         }
     }
 
@@ -470,21 +470,21 @@ impl Maze {
         self.clear_path();
         let mut sol : Vec<(Coord, Direction)> = Vec::new();
         let mut c = self.origin.clone();
-        self.mark_as_visited(&c);
+        self.mark_as_visited(&c, 0_f64);
         loop {
             match self.walk(&c) {
                 Some((next, direction)) => {
-                    self.mark_as_visited(&next);
+                    self.mark_as_visited(&next, 0_f64);
                     if (next.x, next.y) == (self.end.x, self.end.y) {
                         break;
                     }
                     sol.push((c, direction));
-                    c = next.clone();
+                    c = next;
                 },
                 None => {
                     match sol.pop() {
                         Some((next, _)) => {
-                            c = next.clone();
+                            c = next;
                         },
                         None => {
                         }
@@ -493,8 +493,54 @@ impl Maze {
             }
         }
         /* compute lengths */
-        for (c, dir) in sol {
-            println!("{:?}", (c, dir));
+        self.clear_path();
+        /* mark solution as 0 */
+        for v in &sol {
+            let c = &v.0;
+            self.grid[c.y * self.geometry.width + c.x] = CellKind::PathKind(0_f64);
+        }
+        let mut len = 0_f64;
+        for v in &sol {
+            let mut stack : Vec<Coord> = Vec::new();
+            let mut d = 0_f64;
+            c = v.0.clone();
+            loop {
+                match self.walk(&c) {
+                    Some((next, _)) => {
+                        d = d + 1_f64;
+                        if d > len {
+                            len = d;
+                        }
+                        self.mark_as_visited(&next, d);
+                        stack.push(c);
+                        c = next;
+                    },
+                    None => {
+                        match stack.pop() {
+                            Some(next) => {
+                                c = next.clone();
+                                if let CellKind::PathKind(f) = self.cell_kind(&c) {
+                                    d = f;
+                                }
+                            },
+                            None => {
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        len = len.log10();
+        for y in 0..self.geometry.height {
+            for x in 0..self.geometry.width {
+                if let CellKind::PathKind(f) = self.cell_kind(&Coord{x:x, y:y}) {
+                    if f > 0_f64 {
+                        self.grid[y * self.geometry.width + x] =
+                            CellKind::PathKind(f.log10() / len);
+                    }
+                }
+            }
         }
     }
 }
