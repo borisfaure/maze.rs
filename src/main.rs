@@ -60,6 +60,12 @@ pub enum Gradient {
     Solution,
 }
 
+pub enum Algorithm {
+    Prim,
+    Kruskal,
+    Backtracker,
+}
+
 #[derive(Debug)]
 enum Direction {
     Up,
@@ -241,6 +247,23 @@ impl Maze {
         }
     }
 
+    fn get_coord_twice(&self, c: &Coord, dir: &Direction) -> Option<Coord> {
+        match *dir {
+            Direction::Up => {
+                self.get_coord_up(c).and_then(|n| self.get_coord_up(&n))
+            },
+            Direction::Down => {
+                self.get_coord_down(c).and_then(|n| self.get_coord_down(&n))
+            },
+            Direction::Left => {
+                self.get_coord_left(c).and_then(|n| self.get_coord_left(&n))
+            },
+            Direction::Right => {
+                self.get_coord_right(c).and_then(|n| self.get_coord_right(&n))
+            }
+        }
+    }
+
     fn get_random_wall_direction(&self, w: &Wall) -> Option<Direction> {
         if w.x % 2 == 0 {
             match random::<u8>() % 2 {
@@ -289,7 +312,7 @@ impl Maze {
  * slightly more than the edge-based version above.
  */
 
-    fn randomized_prim(&mut self) {
+    fn generate_prim(&mut self) {
         let mut vwalls : Vec<Wall> = Vec::new();
         let mut hwalls : Vec<Wall> = Vec::new();
 
@@ -406,6 +429,122 @@ impl Maze {
         }
     }
 
+    /*
+     * 1. Create a list of all walls, and create a set for each cell,
+     *    each containing just that one cell.
+     * 2. For each wall, in some random order:
+     *    If the cells divided by this wall belong to distinct sets:
+     *      1. Remove the current wall.
+     *      2. Join the sets of the formerly divided cells.
+     */
+    fn generate_kruskal(&mut self) {
+        /* TODO */
+    }
+
+    /*
+     * 1. Make the initial cell the current cell and mark it as visited
+     * 2. While there are unvisited cells
+     *    1. If the current cell has any neighbours which have not been
+     *       visited
+     *       1. Choose randomly one of the unvisited neighbours
+     *       2. Push the current cell to the stack
+     *       3. Remove the wall between the current cell and the chosen cell
+     *       4. Make the chosen cell the current cell and mark it as visited
+     *     2. Else if stack is not empty
+     *        1. Pop a cell from the stack
+     *        2. Make it the current cell
+     */
+    fn generate_backtracker(&mut self) {
+        let mut c = self.origin().clone();
+        self.set_path(&c, 0.0_f64);
+        let mut stack : Vec<Coord> = Vec::new();
+        let mut f = 0_f64;
+
+        self.len = 0_f64;
+
+        loop {
+            match self.get_random_unvisited_cell_neighbour(&c) {
+                None => {
+                    match stack.pop() {
+                        None => {
+                            break;
+                        },
+                        Some(n) => {
+                            if let CellKind::PathKind(d) = self.cell_kind(&n) {
+                                f = d;
+                            }
+                            c = n;
+                        }
+                    }
+                },
+                Some(n) => {
+                    let w = Coord{x: (n.x + c.x) / 2, y: (n.y + c.y) / 2};
+                    f += 1_f64;
+                    self.set_path(&w, f);
+                    c = n.clone();
+                    f += 1_f64;
+                    self.set_path(&n, f);
+                    if self.len < f {
+                        self.len = f;
+                        self.end = n.clone();
+                    }
+                    stack.push(n);
+                }
+            }
+        }
+        /* mark unvisited as walls */
+        for y in 0..self.geometry.height {
+            for x in 0..self.geometry.width {
+                c = Coord{x:x, y:y};
+                match self.cell_kind(&c) {
+                    CellKind::Undefined => {
+                        self.set_wall(&c);
+                    },
+                    CellKind::PathKind(f) => {
+                        self.grid[y * self.geometry.width + x] =
+                            CellKind::PathKind(f / self.len);
+                    },
+                    _ => {
+                    }
+                }
+            }
+        }
+    }
+
+    fn get_random_unvisited_cell_neighbour(&mut self, c: &Coord) -> Option<Coord> {
+        let dirs = vec![Direction::Up, Direction::Down,
+                        Direction::Left, Direction::Right];
+        let mut vec : Vec<Coord> = Vec::with_capacity(4);
+        for d in dirs {
+            if let Some(n) = self.get_coord_twice(c, &d) {
+                if let CellKind::Undefined = self.cell_kind(&n) {
+                    vec.push(n);
+                }
+            }
+        }
+        if vec.len() == 0 {
+            None
+        } else {
+            let r : usize = random::<usize>();
+            let len = vec.len();
+            Some(vec.swap_remove(r % len))
+        }
+    }
+
+    fn generate(&mut self, algorithm: Algorithm) {
+        match algorithm {
+            Algorithm::Prim => {
+                self.generate_prim();
+            },
+            Algorithm::Kruskal => {
+                self.generate_kruskal();
+            },
+            Algorithm::Backtracker => {
+                self.generate_backtracker();
+            },
+        }
+    }
+
     fn draw<T: ?Sized + Rendering>(&mut self, renderer: &T) -> RgbImage {
         let g = image_geometry(renderer, &self.geometry);
         let mut img = RgbImage::new(g.width as u32, g.height as u32);
@@ -482,12 +621,8 @@ impl Maze {
                     c = next;
                 },
                 None => {
-                    match sol.pop() {
-                        Some((next, _)) => {
-                            c = next;
-                        },
-                        None => {
-                        }
+                    if let Some((next, _)) = sol.pop() {
+                        c = next;
                     }
                 }
             }
@@ -574,12 +709,13 @@ pub fn generate_image<T: ?Sized + Rendering>(path: &path::Path,
                                              renderer: &T,
                                              vertical_bias: f64,
                                              origin: super::Origin,
-                                             gradient: Option<Gradient>) {
+                                             gradient: Option<Gradient>,
+                                             algorithm: Algorithm) {
     let grid_geometry = grid_geometry(renderer, &g);
 
     let mut maze = Maze::new(&grid_geometry, vertical_bias, &origin);
 
-    maze.randomized_prim();
+    maze.generate(algorithm);
 
     dbg!("On grid {:?}, from {:?} to {:?} (len: {})",
         grid_geometry, maze.origin(), maze.end(), maze.len().ceil());
@@ -610,6 +746,7 @@ Usage: maze [options] FILE
        maze --foreground COLOR FILE
        maze --background COLOR FILE
        maze --gradient GRADIENT FILE
+       maze --algorithm ALGORITHM FILE
        maze -h | --help
        maze -v | --version
 
@@ -622,7 +759,8 @@ Options:
     -o=ORIGIN, --origin=ORIGIN                    Relative origin of the maze in floating point coordinates. Middle is 0.5x0.5. [default: 0.0x0.0]
     --background=COLOR                            Background color. [default: #073642]
     --foreground=COLOR                            Foreground color(s). Either one or two colors (\"#ffffff\" or \"#ffffff #ff00ff\"). [default: #d70000 #ffffd7]
-    --gradient=ALGORITHM                          If 2 foreground colors, define how to do the gradient. Valid values are: length, solution. [default: length]
+    --gradient=GRADIENT                         If 2 foreground colors, define how to do the gradient. Valid values are: length, solution. [default: length]
+    --algorithm=ALGORITHM                       Algorithm used to generate the maze. Valid values are: prim, kruskal. [default: prim]
 ";
 
 
@@ -731,6 +869,23 @@ fn gradient_parse(g: &str) -> Option<maze::Gradient> {
     }
 }
 
+fn algorithm_parse(s: &str) -> maze::Algorithm {
+    match s {
+        "prim" => {
+            maze::Algorithm::Prim
+        },
+        "kruskal" => {
+            maze::Algorithm::Kruskal
+        },
+        "backtracker" => {
+            maze::Algorithm::Backtracker
+        }
+        _ => {
+            panic!("invalid algorithm {}", s);
+        }
+    }
+}
+
 fn colors_parse(bg: &str, fg: &str) -> (Rgb<u8>, [Rgb<u8>; 2]) {
     let bg = color_parse(bg);
 
@@ -776,8 +931,11 @@ fn main() {
     let gradient = args.get_str("--gradient");
     let gradient = gradient_parse(&gradient);
 
+    let algorithm = args.get_str("--algorithm");
+    let algorithm = algorithm_parse(&algorithm);
+
     maze::generate_image(path, geometry, &*rendering, vertical_bias,
-                         origin, gradient);
+                         origin, gradient, algorithm);
 }
 
 /* }}} */
