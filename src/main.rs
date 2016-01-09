@@ -379,21 +379,7 @@ impl Maze {
                             }
                         }
                     },
-                    (Some(c), _) => {
-                        if let CellKind::PathKind(d) = self.cell_kind(&c) {
-                            self.set_path(&w, d + 1_f64);
-
-                            let walls = self.get_undefined_cells_around(&w);
-                            self.set_walls(&walls);
-                            add_walls(&mut vwalls, &mut hwalls, walls);
-
-                            if self.len < d + 1_f64 {
-                                self.len = d + 1_f64;
-                                self.end = w;
-                            }
-                        }
-                    },
-                    (_, Some(c)) => {
+                    (Some(c), _) | (_, Some(c)) => {
                         if let CellKind::PathKind(d) = self.cell_kind(&c) {
                             self.set_path(&w, d + 1_f64);
 
