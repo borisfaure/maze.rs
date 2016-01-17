@@ -262,18 +262,36 @@ impl Maze {
     }
 
     fn get_random_wall_direction(&self, w: &Wall) -> Option<Direction> {
-        if w.x % 2 == 0 {
-            match random::<u8>() % 2 {
-                0 => Some(Direction::Up),
-                _ => Some(Direction::Down),
+        match (w.x % 2, w.y % 2) {
+            (0, 1) => {
+                match random::<u8>() % 2 {
+                    0 => Some(Direction::Up),
+                    _ => Some(Direction::Down),
+                }
+            },
+            (1, 0) => {
+                match random::<u8>() % 2 {
+                    0 => Some(Direction::Left),
+                    _ => Some(Direction::Right),
+                }
+            },
+            (1, 1) => {
+                let f = random::<f64>();
+                if f < self.vertical_bias {
+                    match random::<u8>() % 2 {
+                        0 => Some(Direction::Left),
+                        _ => Some(Direction::Right),
+                    }
+                } else {
+                    match random::<u8>() % 2 {
+                        0 => Some(Direction::Up),
+                        _ => Some(Direction::Down),
+                    }
+                }
+            },
+            (_, _) => { /* (0, 0) */
+                None
             }
-        } else if w.y % 2 == 0 {
-            match random::<u8>() % 2 {
-                0 => Some(Direction::Left),
-                _ => Some(Direction::Right),
-            }
-        } else {
-            None
         }
     }
 
