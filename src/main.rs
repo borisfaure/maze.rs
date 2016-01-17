@@ -570,13 +570,6 @@ impl Maze {
         }
     }
 
-    fn mark_as_visited(&mut self, c: &Coord, f: f64) {
-        if let CellKind::PathKind(_) = self.cell_kind(c) {
-            self.grid[c.y * self.geometry.width + c.x] =
-                CellKind::PathKind(f);
-        }
-    }
-
     fn is_visited(&self, c: &Coord) -> Option<bool> {
         if let CellKind::PathKind(f) = self.cell_kind(c) {
             if f == -1_f64 {
@@ -589,12 +582,14 @@ impl Maze {
         }
     }
 
-    fn walk(&self, start: &Coord) -> Option<(Coord, Direction)> {
+    fn walk<F>(&self, start: &Coord, is_visited: F)
+      -> Option<(Coord, Direction)>
+      where F: Fn(&Maze, &Coord) -> Option<bool> {
         let dirs = vec![Direction::Up, Direction::Down,
                         Direction::Left, Direction::Right];
         for d in dirs {
             if let Some(c) = self.get_coord_next(start, &d) {
-                match self.is_visited(&c) {
+                match is_visited(self, &c) {
                     Some(b) if !b => {
                         return Some((c, d));
                     },
@@ -606,15 +601,47 @@ impl Maze {
         None
     }
 
+    fn find_end(&mut self) {
+        self.clear_path();
+        let mut stack : Vec<(Coord, Direction, f64)> = Vec::new();
+        let mut c = self.origin.clone();
+        let mut f = 0_f64;
+        let is_visited = |m: &Maze, c: &Coord| m.is_visited(c);
+        self.set_path(&c, 0_f64);
+        loop {
+            match self.walk(&c, &is_visited) {
+                Some((next, direction)) => {
+                    self.set_path(&next, 0_f64);
+                    f += 1_f64;
+                    if f > self.len {
+                        self.len = f;
+                        self.end = next.clone();
+                    }
+                    stack.push((c, direction, f));
+                    c = next;
+                },
+                None => {
+                    if let Some((next, _, distance)) = stack.pop() {
+                        c = next;
+                        f = distance;
+                    } else {
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
     fn compute_solution(&mut self) {
         self.clear_path();
         let mut sol : Vec<(Coord, Direction)> = Vec::new();
         let mut c = self.origin.clone();
-        self.mark_as_visited(&c, 0_f64);
+        let is_visited = |m: &Maze, c: &Coord| m.is_visited(c);
+        self.set_path(&c, 0_f64);
         loop {
-            match self.walk(&c) {
+            match self.walk(&c, &is_visited) {
                 Some((next, direction)) => {
-                    self.mark_as_visited(&next, 0_f64);
+                    self.set_path(&next, 0_f64);
                     if (next.x, next.y) == (self.end.x, self.end.y) {
                         break;
                     }
@@ -641,13 +668,13 @@ impl Maze {
             let mut d = 0_f64;
             c = v.0.clone();
             loop {
-                match self.walk(&c) {
+                match self.walk(&c, &is_visited) {
                     Some((next, _)) => {
                         d = d + 1_f64;
                         if d > len {
                             len = d;
                         }
-                        self.mark_as_visited(&next, d);
+                        self.set_path(&next, d);
                         stack.push(c);
                         c = next;
                     },
