@@ -7,7 +7,7 @@ license = "BSD-2-Clause"
 [dependencies]
 docopt = "*"
 rand = "*"
-color_scaling = "*"
+color_scaling = "0.0.2"
 image = "0.6"
 debug_macros = "*"
 read_color = "*"
