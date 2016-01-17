@@ -174,9 +174,6 @@ impl Maze {
     }
 
     fn set_path(&mut self, c: &Coord, d: f64) {
-        if let CellKind::PathKind(_) = self.cell_kind(&c) {
-            return;
-        }
         self.grid[c.y * self.geometry.width + c.x] = CellKind::PathKind(d);
     }
 
