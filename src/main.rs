@@ -430,6 +430,47 @@ impl Maze {
         }
     }
 
+    fn set_path_value(&mut self, f: f64, o: &Coord) {
+        /* Walk c2 and put f in the path */
+        let mut stack : Vec<Coord> = Vec::new();
+        let mut c = o.clone();
+        let is_visited = |m: &Maze, c: &Coord| {
+            if let CellKind::PathKind(d) = m.cell_kind(c) {
+                if d == f {
+                    Some(true)
+                } else {
+                    Some(false)
+                }
+            } else {
+                None
+            }
+        };
+        stack.push(c.clone());
+        loop {
+            self.grid[c.y * self.geometry.width + c.x] =
+                CellKind::PathKind(f);
+            match self.walk(&c, &is_visited) {
+                Some((next, _)) => {
+                    self.grid[next.y * self.geometry.width + next.x] =
+                        CellKind::PathKind(f);
+                    stack.push(c);
+                    c = next;
+                },
+                None => {
+                    match stack.pop() {
+                        Some(next) => {
+                            c = next.clone();
+                        },
+                        None => {
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+
     /*
      * 1. Create a list of all walls, and create a set for each cell,
      *    each containing just that one cell.
@@ -439,7 +480,92 @@ impl Maze {
      *      2. Join the sets of the formerly divided cells.
      */
     fn generate_kruskal(&mut self) {
-        /* TODO */
+        /* Create list of walls */
+        let nb_walls = ((self.geometry.width + 1) / 2 ) * ((self.geometry.height + 1) / 2) / 2;
+        let mut vwalls : Vec<Coord> = Vec::with_capacity(nb_walls);
+        let mut hwalls : Vec<Coord> = Vec::with_capacity(nb_walls);
+        for y in 0..self.geometry.height {
+            for x in 0..self.geometry.width {
+                match ((x & 1), (y & 1)) {
+                    (0, 1) => {
+                        vwalls.push(Coord{x: x, y: y});
+                    },
+                    (1, 0) => {
+                        hwalls.push(Coord{x: x, y: y});
+                    },
+                    (_, _) => {}
+                }
+            }
+        }
+        let mut f = 0_f64;
+
+        let origin = self.origin.clone();
+        self.set_path(&origin, f);
+
+        while !vwalls.is_empty() || !hwalls.is_empty() {
+            let w = pop_random_wall(&mut vwalls, &mut hwalls, self.vertical_bias);
+            if let Some(dir) = self.get_random_wall_direction(&w) {
+                let o1 = self.get_coord_next(&w as &Coord, &dir);
+                let o2 = self.get_coord_next(&w as &Coord, &opposite(&dir));
+                match (o1, o2) {
+                    (Some(c1), Some(c2)) => {
+                        match (self.cell_kind(&c1), self.cell_kind(&c2)) {
+                            (CellKind::PathKind(d1), CellKind::PathKind(d2)) => {
+                                if d1 != d2 {
+                                    /* merge paths */
+                                    self.set_path(&w, d1);
+                                    self.set_path_value(d1, &c2);
+                                }
+                            },
+                            (CellKind::PathKind(d), CellKind::Undefined) |
+                                (CellKind::Undefined, CellKind::PathKind(d)) => {
+                                    self.set_path(&w, d);
+                                    self.set_path(&c1, d);
+                                    self.set_path(&c2, d);
+                                },
+                                (CellKind::Undefined, CellKind::Undefined) => {
+                                    f += 1_f64;
+                                    self.set_path(&w, f);
+                                    self.set_path(&c1, f);
+                                    self.set_path(&c2, f);
+                                }
+                            (_, _) => {
+                            }
+                        }
+                    },
+                    (Some(c), _) | (_, Some(c)) => {
+                        if let CellKind::PathKind(d) = self.cell_kind(&c) {
+                            self.set_path(&w, d);
+                        } else if let CellKind::Undefined = self.cell_kind(&c) {
+                            f += 1_f64;
+                            self.set_path(&w, f);
+                            self.set_path(&c, f);
+                        }
+                    },
+                    (_, _) => {
+                    }
+                }
+            }
+        }
+        /* Find end */
+        self.find_end();
+        /* mark unvisited as walls */
+        for y in 0..self.geometry.height {
+            for x in 0..self.geometry.width {
+                let c = Coord{x:x, y:y};
+                match self.cell_kind(&c) {
+                    CellKind::Undefined => {
+                        self.set_wall(&c);
+                    },
+                    CellKind::PathKind(f) => {
+                        self.grid[y * self.geometry.width + x] =
+                            CellKind::PathKind(f / self.len);
+                    },
+                    _ => {
+                    }
+                }
+            }
+        }
     }
 
     /*
