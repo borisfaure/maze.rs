@@ -60,12 +60,6 @@ pub enum Gradient {
     Solution,
 }
 
-pub enum Algorithm {
-    Prim,
-    Kruskal,
-    Backtracker,
-}
-
 #[derive(Debug)]
 enum Direction {
     Up,
@@ -118,7 +112,398 @@ fn pop_random_wall(vwalls: &mut Vec<Wall>,
     }
 }
 
+pub trait Algorithm<'a> {
+    fn next(&mut self) -> Option<&Maze>;
+}
 
+/* Kruskal {{{ */
+
+/*
+ * 1. Create a list of all walls, and create a set for each cell,
+ *    each containing just that one cell.
+ * 2. For each wall, in some random order:
+ *    If the cells divided by this wall belong to distinct sets:
+ *      1. Remove the current wall.
+ *      2. Join the sets of the formerly divided cells.
+ */
+struct Kruskal<'a> {
+    maze: &'a mut Maze,
+    vwalls: Vec<Coord>,
+    hwalls: Vec<Coord>,
+    f: f64,
+}
+
+impl<'a> Kruskal<'a> {
+    fn init(maze: &'a mut Maze) -> Kruskal<'a> {
+        /* Create list of walls */
+        let nb_walls = ((maze.geometry.width + 1) / 2 ) * ((maze.geometry.height + 1) / 2) / 2;
+        let mut vwalls : Vec<Coord> = Vec::with_capacity(nb_walls);
+        let mut hwalls : Vec<Coord> = Vec::with_capacity(nb_walls);
+        for y in 0..maze.geometry.height {
+            for x in 0..maze.geometry.width {
+                match ((x & 1), (y & 1)) {
+                    (0, 1) => {
+                        vwalls.push(Coord{x: x, y: y});
+                    },
+                    (1, 0) => {
+                        hwalls.push(Coord{x: x, y: y});
+                    },
+                    (_, _) => {}
+                }
+            }
+        }
+
+        let f = 0_f64;
+
+        let origin = maze.origin.clone();
+        maze.set_path(&origin, f);
+        Kruskal {
+            maze: maze,
+            vwalls: vwalls,
+            hwalls: hwalls,
+            f:f ,
+        }
+    }
+}
+
+impl<'a> Algorithm<'a> for Kruskal<'a> {
+    fn next(&mut self) -> Option<&Maze> {
+        if self.vwalls.is_empty() || self.hwalls.is_empty() {
+            /* Find end */
+            self.maze.find_end();
+            /* mark unvisited as walls */
+            for y in 0..self.maze.geometry.height {
+                for x in 0..self.maze.geometry.width {
+                    let c = Coord{x:x, y:y};
+                    match self.maze.cell_kind(&c) {
+                        CellKind::Undefined => {
+                            self.maze.set_wall(&c);
+                        },
+                        CellKind::PathKind(f) => {
+                            self.maze.grid[y * self.maze.geometry.width + x] =
+                                CellKind::PathKind(f / self.maze.len);
+                        },
+                        _ => {
+                        }
+                    }
+                }
+            }
+            return None
+        }
+        let w = pop_random_wall(&mut self.vwalls, &mut self.hwalls,
+                                self.maze.vertical_bias);
+        if let Some(dir) = self.maze.get_random_wall_direction(&w) {
+            let o1 = self.maze.get_coord_next(&w as &Coord, &dir);
+            let o2 = self.maze.get_coord_next(&w as &Coord, &opposite(&dir));
+            match (o1, o2) {
+                (Some(c1), Some(c2)) => {
+                    match (self.maze.cell_kind(&c1), self.maze.cell_kind(&c2)) {
+                        (CellKind::PathKind(d1), CellKind::PathKind(d2)) => {
+                            if d1 != d2 {
+                                /* merge paths */
+                                self.maze.set_path(&w, d1);
+                                self.maze.set_path_value(d1, &c2);
+                            }
+                        },
+                        (CellKind::PathKind(d), CellKind::Undefined) |
+                            (CellKind::Undefined, CellKind::PathKind(d)) => {
+                                self.maze.set_path(&w, d);
+                                self.maze.set_path(&c1, d);
+                                self.maze.set_path(&c2, d);
+                            },
+                            (CellKind::Undefined, CellKind::Undefined) => {
+                                self.f += 1_f64;
+                                self.maze.set_path(&w,  self.f);
+                                self.maze.set_path(&c1, self.f);
+                                self.maze.set_path(&c2, self.f);
+                            }
+                        (_, _) => {
+                        }
+                    }
+                },
+                (Some(c), _) | (_, Some(c)) => {
+                    if let CellKind::PathKind(d) = self.maze.cell_kind(&c) {
+                        self.maze.set_path(&w, d);
+                    } else if let CellKind::Undefined = self.maze.cell_kind(&c) {
+                        self.f += 1_f64;
+                        self.maze.set_path(&w, self.f);
+                        self.maze.set_path(&c, self.f);
+                    }
+                },
+                (_, _) => {
+                }
+            }
+        }
+        Some(self.maze)
+    }
+}
+
+/* }}} */
+/* Prim {{{ */
+/* Randomized Prim's algorithm
+ *
+ * This algorithm is a randomized version of Prim's algorithm.
+ *
+ *  Start with a grid full of walls.
+ *  Pick a cell, mark it as part of the maze. Add the walls of the cell to the
+ *  wall list.
+ *  While there are walls in the list:
+ *      Pick a random wall from the list and a random direction. If the cell
+ *      in that direction isn't in the maze yet:
+ *          Make the wall a passage and mark the cell on the opposite side as
+ *          part of the maze.
+ *          Add the neighboring walls of the cell to the wall list.
+ *      Remove the wall from the list.
+ *
+ * It will usually be relatively easy to find the way to the starting cell,
+ * but hard to find the way anywhere else.
+ *
+ * Note that simply running classical Prim's on a graph with random edge
+ * weights would create mazes stylistically identical to Kruskal's, because
+ * they are both minimal spanning tree algorithms. Instead, this algorithm
+ * introduces stylistic variation because the edges closer to the starting
+ * point have a lower effective weight.
+ *
+ * Modified version
+ * Although the classical Prim's algorithm keeps a list of edges, for maze
+ * generation we could instead maintain a list of adjacent cells. If the
+ * randomly chosen cell has multiple edges that connect it to the existing
+ * maze, select one of these edges at random. This will tend to branch
+ * slightly more than the edge-based version above.
+ */
+
+struct Prim<'a> {
+    maze: &'a mut Maze,
+    vwalls: Vec<Wall>,
+    hwalls: Vec<Wall>,
+}
+
+impl<'a> Prim<'a> {
+    fn init(maze: &'a mut Maze) -> Prim<'a> {
+        let mut vwalls : Vec<Wall> = Vec::new();
+        let mut hwalls : Vec<Wall> = Vec::new();
+
+        let start = maze.origin();
+        maze.set_path(&start, 0.0_f64);
+        let new_walls = maze.get_undefined_cells_around(&start);
+        maze.set_walls(&new_walls);
+        add_walls(&mut vwalls, &mut hwalls, new_walls);
+        Prim {
+            maze: maze,
+            vwalls: vwalls,
+            hwalls: hwalls,
+        }
+    }
+}
+
+impl<'a> Algorithm<'a> for Prim<'a> {
+    fn next(&mut self) -> Option<&Maze> {
+        if self.vwalls.is_empty() || self.hwalls.is_empty() {
+            for y in (0..self.maze.geometry.height).filter(|&v| v % 2 == 1) {
+                for x in (0..self.maze.geometry.width).filter(|&v| v % 2 == 1) {
+                    if let CellKind::Undefined= self.maze.cell_kind(&Coord{x:x, y:y}) {
+                        self.maze.grid[y * self.maze.geometry.width + x] =
+                            CellKind::WallKind;
+                    }
+                }
+            }
+            for y in 0..self.maze.geometry.height {
+                for x in 0..self.maze.geometry.width {
+                    if let CellKind::PathKind(f) = self.maze.cell_kind(&Coord{x:x, y:y}) {
+                        self.maze.grid[y * self.maze.geometry.width + x] =
+                            CellKind::PathKind(f / self.maze.len);
+                    }
+                }
+            }
+            return None
+        }
+        /* Pick a random wall from the list */
+        let w = pop_random_wall(&mut self.vwalls, &mut self.hwalls,
+                                self.maze.vertical_bias);
+        if let Some(dir) = self.maze.get_random_wall_direction(&w) {
+            let o1 = self.maze.get_coord_next(&w as &Coord, &dir);
+            let o2 = self.maze.get_coord_next(&w as &Coord, &opposite(&dir));
+            match (o1, o2) {
+                (Some(c1), Some(c2)) => {
+                    if let CellKind::PathKind(d) = self.maze.cell_kind(&c1) {
+                        if let CellKind::PathKind(_) = self.maze.cell_kind(&c2) {
+                            return Some(self.maze);
+                        }
+                        self.maze.set_path(&w, d + 1_f64);
+                        if let CellKind::Undefined = self.maze.cell_kind(&c2) {
+                            self.maze.set_path(&c2, d + 2_f64);
+
+                            let walls = self.maze.get_undefined_cells_around(&c2);
+                            self.maze.set_walls(&walls);
+                            add_walls(&mut self.vwalls, &mut self.hwalls, walls);
+
+                            if self.maze.len < d + 2_f64 {
+                                self.maze.len = d + 2_f64;
+                                self.maze.end = c2;
+                            }
+                        }
+                        let walls = self.maze.get_undefined_cells_around(&w);
+                        self.maze.set_walls(&walls);
+                        add_walls(&mut self.vwalls, &mut self.hwalls, walls);
+
+                        if self.maze.len < d + 1_f64 {
+                            self.maze.len = d + 1_f64;
+                            self.maze.end = w;
+                        }
+                    } else if let CellKind::PathKind(d) = self.maze.cell_kind(&c2) {
+                        self.maze.set_path(&w, d + 1_f64);
+                        if let CellKind::Undefined = self.maze.cell_kind(&c1) {
+                            self.maze.set_path(&c1, d + 2_f64);
+
+                            let walls = self.maze.get_undefined_cells_around(&c1);
+                            self.maze.set_walls(&walls);
+                            add_walls(&mut self.vwalls, &mut self.hwalls, walls);
+
+                            if self.maze.len < d + 2_f64 {
+                                self.maze.len = d + 2_f64;
+                                self.maze.end = c1;
+                            }
+                        }
+                        let walls = self.maze.get_undefined_cells_around(&w);
+                        self.maze.set_walls(&walls);
+                        add_walls(&mut self.vwalls, &mut self.hwalls, walls);
+
+                        if self.maze.len < d + 1_f64 {
+                            self.maze.len = d + 1_f64;
+                            self.maze.end = w;
+                        }
+                    }
+                },
+                (Some(c), _) | (_, Some(c)) => {
+                    if let CellKind::PathKind(d) = self.maze.cell_kind(&c) {
+                        self.maze.set_path(&w, d + 1_f64);
+
+                        let walls = self.maze.get_undefined_cells_around(&w);
+                        self.maze.set_walls(&walls);
+                        add_walls(&mut self.vwalls, &mut self.hwalls, walls);
+
+                        if self.maze.len < d + 1_f64 {
+                            self.maze.len = d + 1_f64;
+                            self.maze.end = w;
+                        }
+                    }
+                },
+                (_, _) => {
+                }
+            }
+        }
+        Some(self.maze)
+    }
+}
+
+/* }}} */
+/* BackTracker {{{ */
+    /*
+     * 1. Make the initial cell the current cell and mark it as visited
+     * 2. While there are unvisited cells
+     *    1. If the current cell has any neighbours which have not been
+     *       visited
+     *       1. Choose randomly one of the unvisited neighbours
+     *       2. Push the current cell to the stack
+     *       3. Remove the wall between the current cell and the chosen cell
+     *       4. Make the chosen cell the current cell and mark it as visited
+     *     2. Else if stack is not empty
+     *        1. Pop a cell from the stack
+     *        2. Make it the current cell
+     */
+struct Backtracker<'a> {
+    maze: &'a mut Maze,
+    c: Coord,
+    stack: Vec<Coord>,
+    f: f64,
+    done: bool,
+    to_finish: bool
+}
+
+impl<'a> Backtracker<'a> {
+    fn init(maze: &'a mut Maze) -> Backtracker<'a> {
+        let c = maze.origin().clone();
+        maze.set_path(&c, 0.0_f64);
+        let stack : Vec<Coord> = Vec::new();
+
+        maze.len = 0_f64;
+        Backtracker {
+            maze: maze,
+            c: c,
+            stack: stack,
+            f: 0_f64,
+            done: false,
+            to_finish: false
+        }
+    }
+}
+
+impl<'a> Algorithm<'a> for Backtracker<'a> {
+    fn next(&mut self) -> Option<&Maze> {
+        if self.to_finish {
+            /* mark unvisited as walls */
+            for y in 0..self.maze.geometry.height {
+                for x in 0..self.maze.geometry.width {
+                    let c = Coord{x:x, y:y};
+                    match self.maze.cell_kind(&c) {
+                        CellKind::Undefined => {
+                            self.maze.set_wall(&c);
+                        },
+                        CellKind::PathKind(f) => {
+                            self.maze.grid[y * self.maze.geometry.width + x] =
+                                CellKind::PathKind(f / self.maze.len);
+                        },
+                        _ => {
+                        }
+                    }
+                }
+            }
+            self.done = true;
+        }
+        match self.maze.get_random_unvisited_cell_neighbour(&self.c) {
+            None => {
+                match self.stack.pop() {
+                    None => {
+                        self.to_finish = true;
+                        return Some(self.maze);
+                    },
+                    Some(n) => {
+                        if let CellKind::PathKind(d) = self.maze.cell_kind(&n) {
+                            self.f = d;
+                        }
+                        self.c = n;
+                    }
+                }
+            },
+            Some(n) => {
+                let w = Coord{x: (n.x + self.c.x) / 2, y: (n.y + self.c.y) / 2};
+                self.f += 1_f64;
+                self.maze.set_path(&w, self.f);
+                self.c = n.clone();
+                self.f += 1_f64;
+                self.maze.set_path(&n, self.f);
+                if self.maze.len < self.f {
+                    self.maze.len = self.f;
+                    self.maze.end = n.clone();
+                }
+                self.stack.push(n);
+            }
+        }
+        Some(self.maze)
+    }
+}
+
+/* }}} */
+
+pub enum AlgorithmKind {
+    Prim,
+    Kruskal,
+    Backtracker,
+}
+
+
+/* Maze {{{ */
+#[derive(Debug,Clone)]
 pub struct Maze {
     geometry: super::Geometry,
     grid: Vec<CellKind>,
@@ -189,7 +574,6 @@ impl Maze {
             self.set_wall(&w as &Wall);
         }
     }
-
 
     fn get_undefined_cells_around(&mut self, c: &Coord) -> Vec<Coord> {
         let dirs = vec![Direction::Up, Direction::Down,
@@ -295,141 +679,6 @@ impl Maze {
         }
     }
 
-/* Randomized Prim's algorithm
- *
- * This algorithm is a randomized version of Prim's algorithm.
- *
- *  Start with a grid full of walls.
- *  Pick a cell, mark it as part of the maze. Add the walls of the cell to the
- *  wall list.
- *  While there are walls in the list:
- *      Pick a random wall from the list and a random direction. If the cell
- *      in that direction isn't in the maze yet:
- *          Make the wall a passage and mark the cell on the opposite side as
- *          part of the maze.
- *          Add the neighboring walls of the cell to the wall list.
- *      Remove the wall from the list.
- *
- * It will usually be relatively easy to find the way to the starting cell,
- * but hard to find the way anywhere else.
- *
- * Note that simply running classical Prim's on a graph with random edge
- * weights would create mazes stylistically identical to Kruskal's, because
- * they are both minimal spanning tree algorithms. Instead, this algorithm
- * introduces stylistic variation because the edges closer to the starting
- * point have a lower effective weight.
- *
- * Modified version
- * Although the classical Prim's algorithm keeps a list of edges, for maze
- * generation we could instead maintain a list of adjacent cells. If the
- * randomly chosen cell has multiple edges that connect it to the existing
- * maze, select one of these edges at random. This will tend to branch
- * slightly more than the edge-based version above.
- */
-
-    fn generate_prim(&mut self) {
-        let mut vwalls : Vec<Wall> = Vec::new();
-        let mut hwalls : Vec<Wall> = Vec::new();
-
-        let start = self.origin();
-        self.set_path(&start, 0.0_f64);
-        let new_walls = self.get_undefined_cells_around(&start);
-        self.set_walls(&new_walls);
-        add_walls(&mut vwalls, &mut hwalls, new_walls);
-
-        while !vwalls.is_empty() || !hwalls.is_empty() {
-            /* Pick a random wall from the list */
-            let w = pop_random_wall(&mut vwalls, &mut hwalls, self.vertical_bias);
-            if let Some(dir) = self.get_random_wall_direction(&w) {
-                let o1 = self.get_coord_next(&w as &Coord, &dir);
-                let o2 = self.get_coord_next(&w as &Coord, &opposite(&dir));
-                match (o1, o2) {
-                    (Some(c1), Some(c2)) => {
-                        if let CellKind::PathKind(d) = self.cell_kind(&c1) {
-                            if let CellKind::PathKind(_) = self.cell_kind(&c2) {
-                                continue;
-                            }
-                            self.set_path(&w, d + 1_f64);
-                            if let CellKind::Undefined = self.cell_kind(&c2) {
-                                self.set_path(&c2, d + 2_f64);
-
-                                let walls = self.get_undefined_cells_around(&c2);
-                                self.set_walls(&walls);
-                                add_walls(&mut vwalls, &mut hwalls, walls);
-
-                                if self.len < d + 2_f64 {
-                                    self.len = d + 2_f64;
-                                    self.end = c2;
-                                }
-                            }
-                            let walls = self.get_undefined_cells_around(&w);
-                            self.set_walls(&walls);
-                            add_walls(&mut vwalls, &mut hwalls, walls);
-
-                            if self.len < d + 1_f64 {
-                                self.len = d + 1_f64;
-                                self.end = w;
-                            }
-                        } else if let CellKind::PathKind(d) = self.cell_kind(&c2) {
-                            self.set_path(&w, d + 1_f64);
-                            if let CellKind::Undefined = self.cell_kind(&c1) {
-                                self.set_path(&c1, d + 2_f64);
-
-                                let walls = self.get_undefined_cells_around(&c1);
-                                self.set_walls(&walls);
-                                add_walls(&mut vwalls, &mut hwalls, walls);
-
-                                if self.len < d + 2_f64 {
-                                    self.len = d + 2_f64;
-                                    self.end = c1;
-                                }
-                            }
-                            let walls = self.get_undefined_cells_around(&w);
-                            self.set_walls(&walls);
-                            add_walls(&mut vwalls, &mut hwalls, walls);
-
-                            if self.len < d + 1_f64 {
-                                self.len = d + 1_f64;
-                                self.end = w;
-                            }
-                        }
-                    },
-                    (Some(c), _) | (_, Some(c)) => {
-                        if let CellKind::PathKind(d) = self.cell_kind(&c) {
-                            self.set_path(&w, d + 1_f64);
-
-                            let walls = self.get_undefined_cells_around(&w);
-                            self.set_walls(&walls);
-                            add_walls(&mut vwalls, &mut hwalls, walls);
-
-                            if self.len < d + 1_f64 {
-                                self.len = d + 1_f64;
-                                self.end = w;
-                            }
-                        }
-                    },
-                    (_, _) => {
-                    }
-                }
-            }
-        }
-        for y in (0..self.geometry.height).filter(|&v| v % 2 == 1) {
-            for x in (0..self.geometry.width).filter(|&v| v % 2 == 1) {
-                if let CellKind::Undefined= self.cell_kind(&Coord{x:x, y:y}) {
-                    self.grid[y * self.geometry.width + x] = CellKind::WallKind;
-                }
-            }
-        }
-        for y in 0..self.geometry.height {
-            for x in 0..self.geometry.width {
-                if let CellKind::PathKind(f) = self.cell_kind(&Coord{x:x, y:y}) {
-                    self.grid[y * self.geometry.width + x] =
-                        CellKind::PathKind(f / self.len);
-                }
-            }
-        }
-    }
-
     fn set_path_value(&mut self, f: f64, o: &Coord) {
         /* Walk c2 and put f in the path */
         let mut stack : Vec<Coord> = Vec::new();
@@ -471,173 +720,6 @@ impl Maze {
     }
 
 
-    /*
-     * 1. Create a list of all walls, and create a set for each cell,
-     *    each containing just that one cell.
-     * 2. For each wall, in some random order:
-     *    If the cells divided by this wall belong to distinct sets:
-     *      1. Remove the current wall.
-     *      2. Join the sets of the formerly divided cells.
-     */
-    fn generate_kruskal(&mut self) {
-        /* Create list of walls */
-        let nb_walls = ((self.geometry.width + 1) / 2 ) * ((self.geometry.height + 1) / 2) / 2;
-        let mut vwalls : Vec<Coord> = Vec::with_capacity(nb_walls);
-        let mut hwalls : Vec<Coord> = Vec::with_capacity(nb_walls);
-        for y in 0..self.geometry.height {
-            for x in 0..self.geometry.width {
-                match ((x & 1), (y & 1)) {
-                    (0, 1) => {
-                        vwalls.push(Coord{x: x, y: y});
-                    },
-                    (1, 0) => {
-                        hwalls.push(Coord{x: x, y: y});
-                    },
-                    (_, _) => {}
-                }
-            }
-        }
-        let mut f = 0_f64;
-
-        let origin = self.origin.clone();
-        self.set_path(&origin, f);
-
-        while !vwalls.is_empty() || !hwalls.is_empty() {
-            let w = pop_random_wall(&mut vwalls, &mut hwalls, self.vertical_bias);
-            if let Some(dir) = self.get_random_wall_direction(&w) {
-                let o1 = self.get_coord_next(&w as &Coord, &dir);
-                let o2 = self.get_coord_next(&w as &Coord, &opposite(&dir));
-                match (o1, o2) {
-                    (Some(c1), Some(c2)) => {
-                        match (self.cell_kind(&c1), self.cell_kind(&c2)) {
-                            (CellKind::PathKind(d1), CellKind::PathKind(d2)) => {
-                                if d1 != d2 {
-                                    /* merge paths */
-                                    self.set_path(&w, d1);
-                                    self.set_path_value(d1, &c2);
-                                }
-                            },
-                            (CellKind::PathKind(d), CellKind::Undefined) |
-                                (CellKind::Undefined, CellKind::PathKind(d)) => {
-                                    self.set_path(&w, d);
-                                    self.set_path(&c1, d);
-                                    self.set_path(&c2, d);
-                                },
-                                (CellKind::Undefined, CellKind::Undefined) => {
-                                    f += 1_f64;
-                                    self.set_path(&w, f);
-                                    self.set_path(&c1, f);
-                                    self.set_path(&c2, f);
-                                }
-                            (_, _) => {
-                            }
-                        }
-                    },
-                    (Some(c), _) | (_, Some(c)) => {
-                        if let CellKind::PathKind(d) = self.cell_kind(&c) {
-                            self.set_path(&w, d);
-                        } else if let CellKind::Undefined = self.cell_kind(&c) {
-                            f += 1_f64;
-                            self.set_path(&w, f);
-                            self.set_path(&c, f);
-                        }
-                    },
-                    (_, _) => {
-                    }
-                }
-            }
-        }
-        /* Find end */
-        self.find_end();
-        /* mark unvisited as walls */
-        for y in 0..self.geometry.height {
-            for x in 0..self.geometry.width {
-                let c = Coord{x:x, y:y};
-                match self.cell_kind(&c) {
-                    CellKind::Undefined => {
-                        self.set_wall(&c);
-                    },
-                    CellKind::PathKind(f) => {
-                        self.grid[y * self.geometry.width + x] =
-                            CellKind::PathKind(f / self.len);
-                    },
-                    _ => {
-                    }
-                }
-            }
-        }
-    }
-
-    /*
-     * 1. Make the initial cell the current cell and mark it as visited
-     * 2. While there are unvisited cells
-     *    1. If the current cell has any neighbours which have not been
-     *       visited
-     *       1. Choose randomly one of the unvisited neighbours
-     *       2. Push the current cell to the stack
-     *       3. Remove the wall between the current cell and the chosen cell
-     *       4. Make the chosen cell the current cell and mark it as visited
-     *     2. Else if stack is not empty
-     *        1. Pop a cell from the stack
-     *        2. Make it the current cell
-     */
-    fn generate_backtracker(&mut self) {
-        let mut c = self.origin().clone();
-        self.set_path(&c, 0.0_f64);
-        let mut stack : Vec<Coord> = Vec::new();
-        let mut f = 0_f64;
-
-        self.len = 0_f64;
-
-        loop {
-            match self.get_random_unvisited_cell_neighbour(&c) {
-                None => {
-                    match stack.pop() {
-                        None => {
-                            break;
-                        },
-                        Some(n) => {
-                            if let CellKind::PathKind(d) = self.cell_kind(&n) {
-                                f = d;
-                            }
-                            c = n;
-                        }
-                    }
-                },
-                Some(n) => {
-                    let w = Coord{x: (n.x + c.x) / 2, y: (n.y + c.y) / 2};
-                    f += 1_f64;
-                    self.set_path(&w, f);
-                    c = n.clone();
-                    f += 1_f64;
-                    self.set_path(&n, f);
-                    if self.len < f {
-                        self.len = f;
-                        self.end = n.clone();
-                    }
-                    stack.push(n);
-                }
-            }
-        }
-        /* mark unvisited as walls */
-        for y in 0..self.geometry.height {
-            for x in 0..self.geometry.width {
-                c = Coord{x:x, y:y};
-                match self.cell_kind(&c) {
-                    CellKind::Undefined => {
-                        self.set_wall(&c);
-                    },
-                    CellKind::PathKind(f) => {
-                        self.grid[y * self.geometry.width + x] =
-                            CellKind::PathKind(f / self.len);
-                    },
-                    _ => {
-                    }
-                }
-            }
-        }
-    }
-
     fn get_random_unvisited_cell_neighbour(&mut self, c: &Coord) -> Option<Coord> {
         let dirs = vec![Direction::Up, Direction::Down,
                         Direction::Left, Direction::Right];
@@ -655,20 +737,6 @@ impl Maze {
             let r : usize = random::<usize>();
             let len = vec.len();
             Some(vec.swap_remove(r % len))
-        }
-    }
-
-    fn generate(&mut self, algorithm: Algorithm) {
-        match algorithm {
-            Algorithm::Prim => {
-                self.generate_prim();
-            },
-            Algorithm::Kruskal => {
-                self.generate_kruskal();
-            },
-            Algorithm::Backtracker => {
-                self.generate_backtracker();
-            },
         }
     }
 
@@ -834,6 +902,23 @@ impl Maze {
     }
 }
 
+/* }}} */
+
+fn generate_algorithm<'a>(maze: &'a mut Maze, algorithm: AlgorithmKind) -> Box<Algorithm<'a> + 'a> {
+    match algorithm {
+        AlgorithmKind::Prim => {
+            Box::new(Prim::init(maze))
+        },
+        AlgorithmKind::Kruskal => {
+            Box::new(Kruskal::init(maze))
+        },
+        AlgorithmKind::Backtracker => {
+            Box::new(Backtracker::init(maze))
+        },
+    }
+}
+
+
 
 pub trait Rendering {
     fn tile_size(&self) -> usize;
@@ -864,12 +949,24 @@ pub fn generate_image<T: ?Sized + Rendering>(path: &path::Path,
                                              vertical_bias: f64,
                                              origin: super::Origin,
                                              gradient: Option<Gradient>,
-                                             algorithm: Algorithm) {
+                                             algorithm: AlgorithmKind) {
     let grid_geometry = grid_geometry(renderer, &g);
 
     let mut maze = Maze::new(&grid_geometry, vertical_bias, &origin);
 
-    maze.generate(algorithm);
+    {
+        let mut a = generate_algorithm(&mut maze, algorithm);
+        loop {
+            match a.next() {
+                Some(m) => {
+                    println!("foo:{:?}", m);
+                },
+                None => {
+                    break;
+                }
+            }
+        }
+    }
 
     dbg!("On grid {:?}, from {:?} to {:?} (len: {})",
         grid_geometry, maze.origin(), maze.end(), maze.len().ceil());
@@ -1023,16 +1120,16 @@ fn gradient_parse(g: &str) -> Option<maze::Gradient> {
     }
 }
 
-fn algorithm_parse(s: &str) -> maze::Algorithm {
+fn algorithm_parse(s: &str) -> maze::AlgorithmKind {
     match s {
         "prim" => {
-            maze::Algorithm::Prim
+            maze::AlgorithmKind::Prim
         },
         "kruskal" => {
-            maze::Algorithm::Kruskal
+            maze::AlgorithmKind::Kruskal
         },
         "backtracker" => {
-            maze::Algorithm::Backtracker
+            maze::AlgorithmKind::Backtracker
         }
         _ => {
             panic!("invalid algorithm {}", s);
