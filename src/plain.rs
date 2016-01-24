@@ -40,11 +40,9 @@ impl Rendering for RendererPlain {
                                       f).unwrap();
                 draw_cell_plain(self, img, c, &color);
             },
-            CellKind::WallKind => {
+            _ => {
                 draw_cell_plain(self, img, c, &self.wall_color);
             },
-            _ => {
-            }
         }
     }
 }
