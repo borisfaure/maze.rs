@@ -1,5 +1,6 @@
 extern crate docopt;
 extern crate image;
+extern crate gif;
 extern crate rand;
 #[macro_use]
 extern crate debug_macros;
@@ -29,16 +30,24 @@ pub struct Origin {
 use image::{
     Rgb,
 };
-
 mod maze {
 
 use std::path;
 use image::{
     RgbImage,
 };
+use gif::{
+    Frame,
+    ExtensionData,
+    DisposalMethod,
+    Encoder,
+    Repeat,
+};
+
 use rand::{
     random,
 };
+use std::fs::File;
 
 #[derive(Debug,Clone)]
 pub struct Coord {
@@ -949,17 +958,47 @@ pub fn generate_image<T: ?Sized + Rendering>(path: &path::Path,
                                              vertical_bias: f64,
                                              origin: super::Origin,
                                              gradient: Option<Gradient>,
-                                             algorithm: AlgorithmKind) {
+                                             algorithm: AlgorithmKind,
+                                             animation: bool) {
     let grid_geometry = grid_geometry(renderer, &g);
 
     let mut maze = Maze::new(&grid_geometry, vertical_bias, &origin);
+    let mut nb_iterations = 0u32;
+    let g = image_geometry(renderer, &maze.geometry);
+    let width : u16 = g.width as u16;
+    let height : u16 = g.height as u16;
+
+    let mut image = match animation {
+        true => { Some(File::create(path).unwrap()) },
+        false => None,
+    };
+    let mut encoder = match animation {
+        true => {
+            Some(Encoder::new(image.as_mut().unwrap(), width, height, &[]).unwrap())
+        },
+        false => None,
+    };
+
+    let draw_animated_frame = |m: &Maze, enc: &mut Encoder<&mut File>| {
+        let f = m.draw(renderer);
+        let pixels = f.into_vec();
+        let sliced = &pixels[..];
+        let gif_frame = Frame::from_rgb(width, height,
+                                        sliced);
+
+        enc.write_frame(&gif_frame).unwrap();
+    };
 
     {
         let mut a = generate_algorithm(&mut maze, algorithm);
         loop {
             match a.next() {
                 Some(m) => {
-                    println!("foo:{:?}", m);
+                    nb_iterations += 1u32;
+                    if !animation {
+                        continue;
+                    }
+                    draw_animated_frame(&m, encoder.as_mut().unwrap());
                 },
                 None => {
                     break;
@@ -968,15 +1007,28 @@ pub fn generate_image<T: ?Sized + Rendering>(path: &path::Path,
         }
     }
 
-    dbg!("On grid {:?}, from {:?} to {:?} (len: {})",
-        grid_geometry, maze.origin(), maze.end(), maze.len().ceil());
-
-    if let Some(Gradient::Solution) = gradient {
-        maze.compute_solution();
+    if animation {
+        if let Some(e) = encoder.as_mut() {
+            e.write_extension(ExtensionData::new_control_ext(100u16,
+                                                             DisposalMethod::Any,
+                                                             false, None)).unwrap();
+            draw_animated_frame(&maze, e);
+            e.write_extension(ExtensionData::Repetitions(Repeat::Infinite)).unwrap();
+        }
     }
 
-    let img = maze.draw(renderer);
-    let _ = img.save(path);
+    dbg!("On grid {:?}, from {:?} to {:?} (len: {}). Generated on {} iterations",
+        grid_geometry, maze.origin(), maze.end(), maze.len().ceil(),
+        nb_iterations);
+
+    if !animation {
+        if let Some(Gradient::Solution) = gradient {
+            maze.compute_solution();
+        }
+
+        let img = maze.draw(renderer);
+        let _ = img.save(path);
+    }
 }
 }
 
@@ -998,6 +1050,7 @@ Usage: maze [options] FILE
        maze --background COLOR FILE
        maze --gradient GRADIENT FILE
        maze --algorithm ALGORITHM FILE
+       maze --animation
        maze -h | --help
        maze -v | --version
 
@@ -1010,8 +1063,9 @@ Options:
     -o=ORIGIN, --origin=ORIGIN                    Relative origin of the maze in floating point coordinates. Middle is 0.5x0.5. [default: 0.0x0.0]
     --background=COLOR                            Background color. [default: #073642]
     --foreground=COLOR                            Foreground color(s). Either one or two colors (\"#ffffff\" or \"#ffffff #ff00ff\"). [default: #d70000 #ffffd7]
-    --gradient=GRADIENT                         If 2 foreground colors, define how to do the gradient. Valid values are: length, solution. [default: length]
-    --algorithm=ALGORITHM                       Algorithm used to generate the maze. Valid values are: prim, kruskal. [default: prim]
+    --gradient=GRADIENT                           If 2 foreground colors, define how to do the gradient. Valid values are: length, solution. [default: length]
+    --algorithm=ALGORITHM                         Algorithm used to generate the maze. Valid values are: prim, kruskal. [default: prim]
+    --animation                                   Render an animation as the maze is being generated
 ";
 
 
@@ -1185,8 +1239,10 @@ fn main() {
     let algorithm = args.get_str("--algorithm");
     let algorithm = algorithm_parse(&algorithm);
 
+    let animation = args.get_bool("--animation");
+
     maze::generate_image(path, geometry, &*rendering, vertical_bias,
-                         origin, gradient, algorithm);
+                         origin, gradient, algorithm, animation);
 }
 
 /* }}} */
