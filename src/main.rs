@@ -740,7 +740,7 @@ impl Maze {
         }
     }
 
-    fn draw<T: ?Sized + Rendering>(&mut self, renderer: &T) -> RgbImage {
+    fn draw<T: ?Sized + Rendering>(&self, renderer: &T) -> RgbImage {
         let g = image_geometry(renderer, &self.geometry);
         let mut img = RgbImage::new(g.width as u32, g.height as u32);
 
