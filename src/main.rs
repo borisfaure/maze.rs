@@ -48,6 +48,7 @@ use rand::{
     random,
 };
 use std::fs::File;
+use std::borrow::Cow;
 
 #[derive(Debug,Clone)]
 pub struct Coord {
@@ -761,6 +762,29 @@ impl Maze {
         }
         img
     }
+    fn draw_gif<T: ?Sized + Rendering>(&self, renderer: &T) -> Frame {
+        let g = image_geometry(renderer, &self.geometry);
+        let mut frame = Frame::default();
+
+        frame.width = g.width as u16;
+        frame.height = g.height as u16;
+        frame.palette = None;
+        frame.transparent = None;
+
+        let mut buffer : Vec<u8> = Vec::with_capacity(g.width * g.height);
+        for _ in 0..(g.width*g.height) {
+            buffer.push(0);
+        }
+
+        for y in 0..self.geometry.height {
+            for x in 0..self.geometry.width {
+                let c = Coord{x: x, y: y};
+                renderer.draw_cell_gif(&self, &g, &mut buffer, &c, self.cell_kind(&c));
+            }
+        }
+        frame.buffer = Cow::Owned(buffer);
+        frame
+    }
 
     fn clear_path(&mut self) {
         for y in 0..self.geometry.height {
@@ -932,6 +956,8 @@ fn generate_algorithm<'a>(maze: &'a mut Maze, algorithm: AlgorithmKind) -> Box<A
 pub trait Rendering {
     fn tile_size(&self) -> usize;
     fn draw_cell(&self, &Maze, &mut RgbImage, &Coord, CellKind);
+    fn draw_cell_gif(&self, &Maze, &super::Geometry, &mut Vec<u8>, &Coord, CellKind);
+    fn get_gif_palette(&self) -> Vec<u8>;
 }
 
 
@@ -974,19 +1000,15 @@ pub fn generate_image<T: ?Sized + Rendering>(path: &path::Path,
     };
     let mut encoder = match animation {
         true => {
-            Some(Encoder::new(image.as_mut().unwrap(), width, height, &[]).unwrap())
+            let palette = renderer.get_gif_palette();
+            Some(Encoder::new(image.as_mut().unwrap(), width, height, &palette).unwrap())
         },
         false => None,
     };
 
     let draw_animated_frame = |m: &Maze, enc: &mut Encoder<&mut File>| {
-        let f = m.draw(renderer);
-        let pixels = f.into_vec();
-        let sliced = &pixels[..];
-        let gif_frame = Frame::from_rgb(width, height,
-                                        sliced);
-
-        enc.write_frame(&gif_frame).unwrap();
+        let f = m.draw_gif(renderer);
+        enc.write_frame(&f).unwrap();
     };
 
     {
@@ -998,6 +1020,7 @@ pub fn generate_image<T: ?Sized + Rendering>(path: &path::Path,
                     if !animation {
                         continue;
                     }
+                    dbg!("{} frames generated in gif", nb_iterations);
                     draw_animated_frame(&m, encoder.as_mut().unwrap());
                 },
                 None => {

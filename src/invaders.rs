@@ -71,4 +71,11 @@ impl Rendering for RendererInvaders{
             }
         }
     }
+    fn draw_cell_gif(&self, _maze: &Maze, _img_geom: &super::Geometry,
+                     _buffer: &mut Vec<u8>, _c: &Coord, _cell_kind: CellKind) {
+        panic!("unimplemented");
+    }
+    fn get_gif_palette(&self) -> Vec<u8> {
+        panic!("unimplemented");
+    }
 }
