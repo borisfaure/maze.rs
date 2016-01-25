@@ -290,21 +290,20 @@ struct Prim<'a> {
 
 impl<'a> Prim<'a> {
     fn init(maze: &'a mut Maze) -> Prim<'a> {
-        let mut vwalls : Vec<Wall> = Vec::new();
-        let mut hwalls : Vec<Wall> = Vec::new();
+        let vwalls : Vec<Wall> = Vec::new();
+        let hwalls : Vec<Wall> = Vec::new();
 
         let start = maze.origin();
         maze.set_path(&start, 0.0_f64);
-        let new_walls = maze.get_undefined_cells_around(&start);
-        for w in &new_walls {
-            maze.set_wall(&w as &Wall);
-        }
-        add_walls(&mut vwalls, &mut hwalls, new_walls);
-        Prim {
+        let mut p = Prim {
             maze: maze,
             vwalls: vwalls,
             hwalls: hwalls,
-        }
+        };
+        let new_walls = p.get_undefined_cells_around(&start);
+        p.set_walls(&new_walls);
+        add_walls(&mut p.vwalls, &mut p.hwalls, new_walls);
+        p
     }
 
     fn set_walls(&mut self, walls: &Vec<Coord>) {
@@ -312,6 +311,22 @@ impl<'a> Prim<'a> {
             self.maze.set_wall(&w as &Wall);
         }
     }
+
+    fn get_undefined_cells_around(&mut self, c: &Coord) -> Vec<Coord> {
+        let dirs = vec![Direction::Up, Direction::Down,
+        Direction::Left, Direction::Right];
+        let mut v : Vec<Coord> = Vec::new();
+        for d in dirs {
+            let o = self.maze.get_coord_next(&c, &d);
+            if let Some(c) = o {
+                if let CellKind::Undefined = self.maze.cell_kind(&c) {
+                    v.push(c);
+                }
+            }
+        }
+        v
+    }
+
 }
 
 impl<'a> Algorithm<'a> for Prim<'a> {
@@ -351,7 +366,7 @@ impl<'a> Algorithm<'a> for Prim<'a> {
                         if let CellKind::Undefined = self.maze.cell_kind(&c2) {
                             self.maze.set_path(&c2, d + 2_f64);
 
-                            let walls = self.maze.get_undefined_cells_around(&c2);
+                            let walls = self.get_undefined_cells_around(&c2);
                             self.set_walls(&walls);
                             add_walls(&mut self.vwalls, &mut self.hwalls, walls);
 
@@ -360,7 +375,7 @@ impl<'a> Algorithm<'a> for Prim<'a> {
                                 self.maze.end = c2;
                             }
                         }
-                        let walls = self.maze.get_undefined_cells_around(&w);
+                        let walls = self.get_undefined_cells_around(&w);
                         self.set_walls(&walls);
                         add_walls(&mut self.vwalls, &mut self.hwalls, walls);
 
@@ -373,7 +388,7 @@ impl<'a> Algorithm<'a> for Prim<'a> {
                         if let CellKind::Undefined = self.maze.cell_kind(&c1) {
                             self.maze.set_path(&c1, d + 2_f64);
 
-                            let walls = self.maze.get_undefined_cells_around(&c1);
+                            let walls = self.get_undefined_cells_around(&c1);
                             self.set_walls(&walls);
                             add_walls(&mut self.vwalls, &mut self.hwalls, walls);
 
@@ -382,7 +397,7 @@ impl<'a> Algorithm<'a> for Prim<'a> {
                                 self.maze.end = c1;
                             }
                         }
-                        let walls = self.maze.get_undefined_cells_around(&w);
+                        let walls = self.get_undefined_cells_around(&w);
                         self.set_walls(&walls);
                         add_walls(&mut self.vwalls, &mut self.hwalls, walls);
 
@@ -396,7 +411,7 @@ impl<'a> Algorithm<'a> for Prim<'a> {
                     if let CellKind::PathKind(d) = self.maze.cell_kind(&c) {
                         self.maze.set_path(&w, d + 1_f64);
 
-                        let walls = self.maze.get_undefined_cells_around(&w);
+                        let walls = self.get_undefined_cells_around(&w);
                         self.set_walls(&walls);
                         add_walls(&mut self.vwalls, &mut self.hwalls, walls);
 
@@ -413,6 +428,7 @@ impl<'a> Algorithm<'a> for Prim<'a> {
         Some(self.maze)
     }
 }
+
 
 /* }}} */
 /* BackTracker {{{ */
@@ -585,21 +601,6 @@ impl Maze {
             return;
         }
         self.grid[c.y * self.geometry.width + c.x] = CellKind::WallKind;
-    }
-
-    fn get_undefined_cells_around(&mut self, c: &Coord) -> Vec<Coord> {
-        let dirs = vec![Direction::Up, Direction::Down,
-                        Direction::Left, Direction::Right];
-        let mut v : Vec<Coord> = Vec::new();
-        for d in dirs {
-            let o = self.get_coord_next(&c, &d);
-            if let Some(c) = o {
-                if let CellKind::Undefined = self.cell_kind(&c) {
-                    v.push(c);
-                }
-            }
-        }
-        v
     }
 
     fn get_coord_up(&self, c: &Coord) -> Option<Coord> {
