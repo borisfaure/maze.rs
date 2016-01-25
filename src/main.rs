@@ -296,12 +296,20 @@ impl<'a> Prim<'a> {
         let start = maze.origin();
         maze.set_path(&start, 0.0_f64);
         let new_walls = maze.get_undefined_cells_around(&start);
-        maze.set_walls(&new_walls);
+        for w in &new_walls {
+            maze.set_wall(&w as &Wall);
+        }
         add_walls(&mut vwalls, &mut hwalls, new_walls);
         Prim {
             maze: maze,
             vwalls: vwalls,
             hwalls: hwalls,
+        }
+    }
+
+    fn set_walls(&mut self, walls: &Vec<Coord>) {
+        for w in walls {
+            self.maze.set_wall(&w as &Wall);
         }
     }
 }
@@ -344,7 +352,7 @@ impl<'a> Algorithm<'a> for Prim<'a> {
                             self.maze.set_path(&c2, d + 2_f64);
 
                             let walls = self.maze.get_undefined_cells_around(&c2);
-                            self.maze.set_walls(&walls);
+                            self.set_walls(&walls);
                             add_walls(&mut self.vwalls, &mut self.hwalls, walls);
 
                             if self.maze.len < d + 2_f64 {
@@ -353,7 +361,7 @@ impl<'a> Algorithm<'a> for Prim<'a> {
                             }
                         }
                         let walls = self.maze.get_undefined_cells_around(&w);
-                        self.maze.set_walls(&walls);
+                        self.set_walls(&walls);
                         add_walls(&mut self.vwalls, &mut self.hwalls, walls);
 
                         if self.maze.len < d + 1_f64 {
@@ -366,7 +374,7 @@ impl<'a> Algorithm<'a> for Prim<'a> {
                             self.maze.set_path(&c1, d + 2_f64);
 
                             let walls = self.maze.get_undefined_cells_around(&c1);
-                            self.maze.set_walls(&walls);
+                            self.set_walls(&walls);
                             add_walls(&mut self.vwalls, &mut self.hwalls, walls);
 
                             if self.maze.len < d + 2_f64 {
@@ -375,7 +383,7 @@ impl<'a> Algorithm<'a> for Prim<'a> {
                             }
                         }
                         let walls = self.maze.get_undefined_cells_around(&w);
-                        self.maze.set_walls(&walls);
+                        self.set_walls(&walls);
                         add_walls(&mut self.vwalls, &mut self.hwalls, walls);
 
                         if self.maze.len < d + 1_f64 {
@@ -389,7 +397,7 @@ impl<'a> Algorithm<'a> for Prim<'a> {
                         self.maze.set_path(&w, d + 1_f64);
 
                         let walls = self.maze.get_undefined_cells_around(&w);
-                        self.maze.set_walls(&walls);
+                        self.set_walls(&walls);
                         add_walls(&mut self.vwalls, &mut self.hwalls, walls);
 
                         if self.maze.len < d + 1_f64 {
@@ -577,12 +585,6 @@ impl Maze {
             return;
         }
         self.grid[c.y * self.geometry.width + c.x] = CellKind::WallKind;
-    }
-
-    fn set_walls(&mut self, walls: &Vec<Coord>) {
-        for w in walls {
-            self.set_wall(&w as &Wall);
-        }
     }
 
     fn get_undefined_cells_around(&mut self, c: &Coord) -> Vec<Coord> {
