@@ -403,7 +403,7 @@ impl<'a> Prim<'a> {
 
 impl<'a> Algorithm<'a> for Prim<'a> {
     fn next(&mut self) -> Option<&Maze> {
-        if self.vwalls.is_empty() || self.hwalls.is_empty() {
+        if self.vwalls.is_empty() && self.hwalls.is_empty() {
             for y in (0..self.maze.geometry.height).filter(|&v| v % 2 == 1) {
                 for x in (0..self.maze.geometry.width).filter(|&v| v % 2 == 1) {
                     if let CellKind::Undefined= self.maze.cell_kind(&Coord{x:x, y:y}) {
