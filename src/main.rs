@@ -214,13 +214,45 @@ impl<'a> Kruskal<'a> {
             }
         }
     }
+
+    fn find_end(&mut self) {
+        self.maze.clear_path();
+        let mut stack : Vec<(Coord, Direction, f64)> = Vec::new();
+        let mut c = self.maze.origin.clone();
+        let mut f = 0_f64;
+        let is_visited = |m: &Maze, c: &Coord| m.is_visited(c);
+        self.maze.set_path(&c, 0_f64);
+        loop {
+            match self.maze.walk(&c, &is_visited) {
+                Some((next, direction)) => {
+                    self.maze.set_path(&next, 0_f64);
+                    f += 1_f64;
+                    if f > self.maze.len {
+                        self.maze.len = f;
+                        self.maze.end = next.clone();
+                    }
+                    stack.push((c, direction, f));
+                    c = next;
+                },
+                None => {
+                    if let Some((next, _, distance)) = stack.pop() {
+                        c = next;
+                        f = distance;
+                    } else {
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
 }
 
 impl<'a> Algorithm<'a> for Kruskal<'a> {
     fn next(&mut self) -> Option<&Maze> {
         if self.vwalls.is_empty() || self.hwalls.is_empty() {
             /* Find end */
-            self.maze.find_end();
+            self.find_end();
             /* mark unvisited as walls */
             for y in 0..self.maze.geometry.height {
                 for x in 0..self.maze.geometry.width {
@@ -830,37 +862,6 @@ impl Maze {
             }
         }
         None
-    }
-
-    fn find_end(&mut self) {
-        self.clear_path();
-        let mut stack : Vec<(Coord, Direction, f64)> = Vec::new();
-        let mut c = self.origin.clone();
-        let mut f = 0_f64;
-        let is_visited = |m: &Maze, c: &Coord| m.is_visited(c);
-        self.set_path(&c, 0_f64);
-        loop {
-            match self.walk(&c, &is_visited) {
-                Some((next, direction)) => {
-                    self.set_path(&next, 0_f64);
-                    f += 1_f64;
-                    if f > self.len {
-                        self.len = f;
-                        self.end = next.clone();
-                    }
-                    stack.push((c, direction, f));
-                    c = next;
-                },
-                None => {
-                    if let Some((next, _, distance)) = stack.pop() {
-                        c = next;
-                        f = distance;
-                    } else {
-                        break;
-                    }
-                }
-            }
-        }
     }
 
     fn compute_solution(&mut self) {
