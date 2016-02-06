@@ -174,6 +174,46 @@ impl<'a> Kruskal<'a> {
             f:f ,
         }
     }
+
+    fn set_path_value(&mut self, f: f64, o: &Coord) {
+        /* Walk c2 and put f in the path */
+        let mut stack : Vec<Coord> = Vec::new();
+        let mut c = o.clone();
+        let is_visited = |m: &Maze, c: &Coord| {
+            if let CellKind::PathKind(d) = m.cell_kind(c) {
+                if d == f {
+                    Some(true)
+                } else {
+                    Some(false)
+                }
+            } else {
+                None
+            }
+        };
+        stack.push(c.clone());
+        loop {
+            self.maze.grid[c.y * self.maze.geometry.width + c.x] =
+                CellKind::PathKind(f);
+            match self.maze.walk(&c, &is_visited) {
+                Some((next, _)) => {
+                    self.maze.grid[next.y * self.maze.geometry.width + next.x] =
+                        CellKind::PathKind(f);
+                    stack.push(c);
+                    c = next;
+                },
+                None => {
+                    match stack.pop() {
+                        Some(next) => {
+                            c = next.clone();
+                        },
+                        None => {
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 impl<'a> Algorithm<'a> for Kruskal<'a> {
@@ -212,7 +252,7 @@ impl<'a> Algorithm<'a> for Kruskal<'a> {
                             if d1 != d2 {
                                 /* merge paths */
                                 self.maze.set_path(&w, d1);
-                                self.maze.set_path_value(d1, &c2);
+                                self.set_path_value(d1, &c2);
                             }
                         },
                         (CellKind::PathKind(d), CellKind::Undefined) |
@@ -507,6 +547,7 @@ impl<'a> Backtracker<'a> {
             Some(vec.swap_remove(r % len))
         }
     }
+
 }
 
 impl<'a> Algorithm<'a> for Backtracker<'a> {
@@ -708,46 +749,6 @@ impl Maze {
             },
             (_, _) => { /* (0, 0) */
                 None
-            }
-        }
-    }
-
-    fn set_path_value(&mut self, f: f64, o: &Coord) {
-        /* Walk c2 and put f in the path */
-        let mut stack : Vec<Coord> = Vec::new();
-        let mut c = o.clone();
-        let is_visited = |m: &Maze, c: &Coord| {
-            if let CellKind::PathKind(d) = m.cell_kind(c) {
-                if d == f {
-                    Some(true)
-                } else {
-                    Some(false)
-                }
-            } else {
-                None
-            }
-        };
-        stack.push(c.clone());
-        loop {
-            self.grid[c.y * self.geometry.width + c.x] =
-                CellKind::PathKind(f);
-            match self.walk(&c, &is_visited) {
-                Some((next, _)) => {
-                    self.grid[next.y * self.geometry.width + next.x] =
-                        CellKind::PathKind(f);
-                    stack.push(c);
-                    c = next;
-                },
-                None => {
-                    match stack.pop() {
-                        Some(next) => {
-                            c = next.clone();
-                        },
-                        None => {
-                            break;
-                        }
-                    }
-                }
             }
         }
     }
