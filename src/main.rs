@@ -470,6 +470,43 @@ impl<'a> Backtracker<'a> {
             to_finish: false
         }
     }
+
+    fn get_coord_twice(&self, c: &Coord, dir: &Direction) -> Option<Coord> {
+        match *dir {
+            Direction::Up => {
+                self.maze.get_coord_up(c).and_then(|n| self.maze.get_coord_up(&n))
+            },
+            Direction::Down => {
+                self.maze.get_coord_down(c).and_then(|n| self.maze.get_coord_down(&n))
+            },
+            Direction::Left => {
+                self.maze.get_coord_left(c).and_then(|n| self.maze.get_coord_left(&n))
+            },
+            Direction::Right => {
+                self.maze.get_coord_right(c).and_then(|n| self.maze.get_coord_right(&n))
+            }
+        }
+    }
+
+    fn get_random_unvisited_cell_neighbour(&mut self) -> Option<Coord> {
+        let dirs = vec![Direction::Up, Direction::Down,
+                        Direction::Left, Direction::Right];
+        let mut vec : Vec<Coord> = Vec::with_capacity(4);
+        for d in dirs {
+            if let Some(n) = self.get_coord_twice(&self.c, &d) {
+                if let CellKind::Undefined = self.maze.cell_kind(&n) {
+                    vec.push(n);
+                }
+            }
+        }
+        if vec.len() == 0 {
+            None
+        } else {
+            let r : usize = random::<usize>();
+            let len = vec.len();
+            Some(vec.swap_remove(r % len))
+        }
+    }
 }
 
 impl<'a> Algorithm<'a> for Backtracker<'a> {
@@ -494,7 +531,7 @@ impl<'a> Algorithm<'a> for Backtracker<'a> {
             }
             self.done = true;
         }
-        match self.maze.get_random_unvisited_cell_neighbour(&self.c) {
+        match self.get_random_unvisited_cell_neighbour() {
             None => {
                 match self.stack.pop() {
                     None => {
@@ -641,23 +678,6 @@ impl Maze {
         }
     }
 
-    fn get_coord_twice(&self, c: &Coord, dir: &Direction) -> Option<Coord> {
-        match *dir {
-            Direction::Up => {
-                self.get_coord_up(c).and_then(|n| self.get_coord_up(&n))
-            },
-            Direction::Down => {
-                self.get_coord_down(c).and_then(|n| self.get_coord_down(&n))
-            },
-            Direction::Left => {
-                self.get_coord_left(c).and_then(|n| self.get_coord_left(&n))
-            },
-            Direction::Right => {
-                self.get_coord_right(c).and_then(|n| self.get_coord_right(&n))
-            }
-        }
-    }
-
     fn get_random_wall_direction(&self, w: &Wall) -> Option<Direction> {
         match (w.x % 2, w.y % 2) {
             (0, 1) => {
@@ -732,26 +752,6 @@ impl Maze {
         }
     }
 
-
-    fn get_random_unvisited_cell_neighbour(&mut self, c: &Coord) -> Option<Coord> {
-        let dirs = vec![Direction::Up, Direction::Down,
-                        Direction::Left, Direction::Right];
-        let mut vec : Vec<Coord> = Vec::with_capacity(4);
-        for d in dirs {
-            if let Some(n) = self.get_coord_twice(c, &d) {
-                if let CellKind::Undefined = self.cell_kind(&n) {
-                    vec.push(n);
-                }
-            }
-        }
-        if vec.len() == 0 {
-            None
-        } else {
-            let r : usize = random::<usize>();
-            let len = vec.len();
-            Some(vec.swap_remove(r % len))
-        }
-    }
 
     fn draw<T: ?Sized + Rendering>(&self, renderer: &T) -> RgbImage {
         let g = image_geometry(renderer, &self.geometry);
