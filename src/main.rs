@@ -522,7 +522,6 @@ struct Backtracker<'a> {
     c: Coord,
     stack: Vec<Coord>,
     f: f64,
-    done: bool,
     to_finish: bool
 }
 
@@ -538,7 +537,6 @@ impl<'a> Backtracker<'a> {
             c: c,
             stack: stack,
             f: 0_f64,
-            done: false,
             to_finish: false
         }
     }
@@ -602,38 +600,40 @@ impl<'a> Algorithm<'a> for Backtracker<'a> {
                     }
                 }
             }
-            self.done = true;
+            return None;
         }
-        match self.get_random_unvisited_cell_neighbour() {
-            None => {
-                match self.stack.pop() {
-                    None => {
-                        self.to_finish = true;
-                        return Some(self.maze);
-                    },
-                    Some(n) => {
-                        if let CellKind::PathKind(d) = self.maze.cell_kind(&n) {
-                            self.f = d;
+        loop {
+            match self.get_random_unvisited_cell_neighbour() {
+                None => {
+                    match self.stack.pop() {
+                        None => {
+                            self.to_finish = true;
+                            return Some(self.maze);
+                        },
+                        Some(n) => {
+                            if let CellKind::PathKind(d) = self.maze.cell_kind(&n) {
+                                self.f = d;
+                            }
+                            self.c = n;
                         }
-                        self.c = n;
                     }
+                },
+                Some(n) => {
+                    let w = Coord{x: (n.x + self.c.x) / 2, y: (n.y + self.c.y) / 2};
+                    self.f += 1_f64;
+                    self.maze.set_path(&w, self.f);
+                    self.c = n.clone();
+                    self.f += 1_f64;
+                    self.maze.set_path(&n, self.f);
+                    if self.maze.len < self.f {
+                        self.maze.len = self.f;
+                        self.maze.end = n.clone();
+                    }
+                    self.stack.push(n);
+                    return Some(self.maze)
                 }
-            },
-            Some(n) => {
-                let w = Coord{x: (n.x + self.c.x) / 2, y: (n.y + self.c.y) / 2};
-                self.f += 1_f64;
-                self.maze.set_path(&w, self.f);
-                self.c = n.clone();
-                self.f += 1_f64;
-                self.maze.set_path(&n, self.f);
-                if self.maze.len < self.f {
-                    self.maze.len = self.f;
-                    self.maze.end = n.clone();
-                }
-                self.stack.push(n);
             }
         }
-        Some(self.maze)
     }
 }
 
