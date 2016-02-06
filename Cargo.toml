@@ -9,6 +9,6 @@ docopt = "*"
 rand = "*"
 color_scaling = "0.0.2"
 image = "0.6"
-gif = "*"
+gif = { git = "https://github.com/billiob/image-gif" }
 debug_macros = "*"
 read_color = "*"
