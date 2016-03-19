@@ -7,8 +7,8 @@ license = "BSD-2-Clause"
 [dependencies]
 docopt = "*"
 rand = "*"
-color_scaling = "0.0.2"
-image = "0.6"
-gif = { git = "https://github.com/billiob/image-gif" }
+color_scaling = "0.0.3"
+image = "0.7"
+gif = "0.8"
 debug_macros = "*"
 read_color = "*"
