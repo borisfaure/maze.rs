@@ -1,3 +1,3 @@
 Some experiments with Rust.
 
-More about it on http://billiob.net/blog/20160206_rust_maze.html
+More about it on https://fau.re/blog/20160206_rust_maze.html
