@@ -1,18 +1,18 @@
 extern crate docopt;
-extern crate image;
 extern crate gif;
+extern crate image;
 extern crate rand;
 #[macro_use]
 extern crate debug_macros;
 extern crate color_scaling;
 extern crate read_color;
 
-mod maze;
-mod plain;
 mod invaders;
+mod maze;
 mod mosaic;
+mod plain;
 
-#[derive(Debug,Clone)]
+#[derive(Debug, Clone)]
 pub struct Geometry {
     width: usize,
     height: usize,
@@ -28,9 +28,7 @@ pub struct Origin {
     y: f64,
 }
 
-use image::{
-    Rgb,
-};
+use image::Rgb;
 
 /* CLI {{{ */
 
@@ -68,43 +66,31 @@ Options:
     --animation                                   Render an animation as the maze is being generated
 ";
 
-
-
 fn geometry_parse(geometry: &str) -> Geometry {
-    let geometry : Vec<&str> = geometry.split('x').collect();
+    let geometry: Vec<&str> = geometry.split('x').collect();
     if geometry.len() != 2 {
         panic!("invalid geometry");
     }
-    let width : usize = geometry[0].parse()
-        .ok()
-        .expect("invalid geometry");
-    let height : usize = geometry[1].parse()
-        .ok()
-        .expect("invalid geometry");
-    Geometry{width: width, height: height}
+    let width: usize = geometry[0].parse().ok().expect("invalid geometry");
+    let height: usize = geometry[1].parse().ok().expect("invalid geometry");
+    Geometry {
+        width: width,
+        height: height,
+    }
 }
 
-fn rendering_parse(rendering: &str, bg: Rgb<u8>, fg: [Rgb<u8>; 2])
-    -> Box<maze::Rendering> {
+fn rendering_parse(rendering: &str, bg: Rgb<u8>, fg: [Rgb<u8>; 2]) -> Box<dyn maze::Rendering> {
     match rendering {
-        "plain" => {
-            Box::new(plain::RendererPlain {
-                path_color_start: fg[0],
-                path_color_end: fg[1],
-                wall_color: bg,
-            })
-        },
-        "invaders" => {
-            Box::new(invaders::RendererInvaders{
-                invader_color: fg[0],
-                wall_color: bg,
-            })
-        },
-        "mosaic" => {
-            Box::new(mosaic::RendererMosaic{
-                is_inverted: false,
-            })
-        },
+        "plain" => Box::new(plain::RendererPlain {
+            path_color_start: fg[0],
+            path_color_end: fg[1],
+            wall_color: bg,
+        }),
+        "invaders" => Box::new(invaders::RendererInvaders {
+            invader_color: fg[0],
+            wall_color: bg,
+        }),
+        "mosaic" => Box::new(mosaic::RendererMosaic { is_inverted: false }),
         _ => {
             panic!("invalid rendering mode")
         }
@@ -129,13 +115,9 @@ fn origin_parse(origin: &str) -> Origin {
     if origin.len() != 2 {
         panic!("invalid geometry");
     }
-    let x : f64 = origin[0].parse()
-        .ok()
-        .expect("invalid origin");
-    let y : f64 = origin[1].parse()
-        .ok()
-        .expect("invalid origin");
-    Origin{x: x, y: y}
+    let x: f64 = origin[0].parse().ok().expect("invalid origin");
+    let y: f64 = origin[1].parse().ok().expect("invalid origin");
+    Origin { x: x, y: y }
 }
 
 fn color_parse(color: &str) -> Rgb<u8> {
@@ -143,48 +125,33 @@ fn color_parse(color: &str) -> Rgb<u8> {
     match c.next() {
         None => {
             panic!("invalid color {}", color);
-        },
+        }
         Some(x) if x != '#' => {
             panic!("invalid color {}", color);
-        },
-        _ => {
         }
+        _ => {}
     }
     match read_color::rgb(c) {
         None => {
             panic!("invalid color {}", color);
-        },
-        Some(d) => {
-            Rgb{data: d}
         }
+        Some(d) => Rgb(d),
     }
 }
 
 fn gradient_parse(g: &str) -> Option<maze::Gradient> {
     match g {
-        "length" => {
-            Some(maze::Gradient::Length)
-        },
-        "solution" => {
-            Some(maze::Gradient::Solution)
-        },
-        _ => {
-            None
-        }
+        "length" => Some(maze::Gradient::Length),
+        "solution" => Some(maze::Gradient::Solution),
+        _ => None,
     }
 }
 
 fn algorithm_parse(s: &str) -> maze::AlgorithmKind {
     match s {
-        "prim" => {
-            maze::AlgorithmKind::Prim
-        },
-        "kruskal" => {
-            maze::AlgorithmKind::Kruskal
-        },
-        "backtracker" => {
-            maze::AlgorithmKind::Backtracker
-        }
+        "prim" => maze::AlgorithmKind::Prim,
+        "kruskal" => maze::AlgorithmKind::Kruskal,
+        "backtracker" => maze::AlgorithmKind::Backtracker,
         _ => {
             panic!("invalid algorithm {}", s);
         }
@@ -194,7 +161,7 @@ fn algorithm_parse(s: &str) -> maze::AlgorithmKind {
 fn colors_parse(bg: &str, fg: &str) -> (Rgb<u8>, [Rgb<u8>; 2]) {
     let bg = color_parse(bg);
 
-    let vec_str : Vec<&str> = fg.split(' ').collect();
+    let vec_str: Vec<&str> = fg.split(' ').collect();
     if vec_str.len() > 2 {
         panic!("invalid colors '{}'", fg);
     }
@@ -213,13 +180,12 @@ fn colors_parse(bg: &str, fg: &str) -> (Rgb<u8>, [Rgb<u8>; 2]) {
 fn main() {
     let version = env!("CARGO_PKG_VERSION").to_owned();
     let args = Docopt::new(USAGE)
-                      .and_then(|dopt| dopt.version(Some(version)).parse())
-                      .unwrap_or_else(|e| e.exit());
+        .and_then(|dopt| dopt.version(Some(version)).parse())
+        .unwrap_or_else(|e| e.exit());
     let geometry = args.get_str("--geometry");
     let geometry = geometry_parse(&geometry);
 
-    let (bg, fg) = colors_parse(args.get_str("--background"),
-                                args.get_str("--foreground"));
+    let (bg, fg) = colors_parse(args.get_str("--background"), args.get_str("--foreground"));
 
     let rendering = args.get_str("--rendering");
     let rendering = rendering_parse(&rendering, bg, fg);
@@ -241,8 +207,16 @@ fn main() {
 
     let animation = args.get_bool("--animation");
 
-    maze::generate_image(path, geometry, &*rendering, vertical_bias,
-                         origin, gradient, algorithm, animation);
+    maze::generate_image(
+        path,
+        geometry,
+        &*rendering,
+        vertical_bias,
+        origin,
+        gradient,
+        algorithm,
+        animation,
+    );
 }
 
 /* }}} */
