@@ -18,7 +18,7 @@ pub fn draw_cell_plain<T: Rendering>(renderer: &T, img: &mut RgbImage, c: &Coord
 pub fn draw_cell_plain_gif<T: Rendering>(
     renderer: &T,
     width: usize,
-    buffer: &mut Vec<u8>,
+    buffer: &mut [u8],
     c: &Coord,
     color_idx: u8,
 ) {
