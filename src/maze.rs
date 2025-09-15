@@ -971,20 +971,13 @@ pub fn generate_image<T: ?Sized + Rendering>(
 
     {
         let mut a = generate_algorithm(&mut maze, algorithm);
-        loop {
-            match a.next() {
-                Some(m) => {
-                    nb_iterations += 1u32;
-                    if !animation {
-                        continue;
-                    }
-                    dbg!("{} frames generated in gif", nb_iterations);
-                    draw_animated_frame(m, encoder.as_mut().unwrap());
-                }
-                None => {
-                    break;
-                }
+        while let Some(m) = a.next() {
+            nb_iterations += 1u32;
+            if !animation {
+                continue;
             }
+            dbg!("{} frames generated in gif", nb_iterations);
+            draw_animated_frame(m, encoder.as_mut().unwrap());
         }
     }
 
