@@ -747,7 +747,7 @@ impl Maze {
         }
         img
     }
-    fn draw_gif<T: ?Sized + Rendering>(&self, renderer: &T) -> Frame {
+    fn draw_gif<T: ?Sized + Rendering>(&self, renderer: &T) -> Frame<'_> {
         let g = image_geometry(renderer, &self.geometry);
         let mut frame = Frame::default();
 
