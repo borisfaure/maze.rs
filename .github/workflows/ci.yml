@@ -1,0 +1,27 @@
+name: CI
+on:
+  push:
+  pull_request:
+  schedule:
+    - cron: '39 1 * * 6'
+
+jobs:
+  checks_and_builds:
+    strategy:
+      fail-fast: false
+      matrix:
+        action:
+          - fmt
+          - doc
+          - check
+          - clippy
+          - build
+          - build-release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v5
+      - name: install rust
+        run: curl --proto '=https' --tlsv1.3 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal
+      - name: act
+        run: .github/scripts/ci.bash ${{ matrix.action }}
