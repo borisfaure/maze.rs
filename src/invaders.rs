@@ -68,9 +68,9 @@ impl Rendering for RendererInvaders {
         _c: &Coord,
         _cell_kind: CellKind,
     ) {
-        panic!("unimplemented");
+        unimplemented!();
     }
     fn get_gif_palette(&self) -> Vec<u8> {
-        panic!("unimplemented");
+        unimplemented!();
     }
 }
