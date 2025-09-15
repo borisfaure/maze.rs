@@ -750,10 +750,7 @@ impl Maze {
     fn draw_gif<T: ?Sized + Rendering>(&self, renderer: &T) -> Frame<'_> {
         let g = image_geometry(renderer, &self.geometry);
 
-        let mut buffer: Vec<u8> = Vec::with_capacity(g.width * g.height);
-        for _ in 0..(g.width * g.height) {
-            buffer.push(0);
-        }
+        let mut buffer: Vec<u8> = vec![0; g.width * g.height];
 
         for y in 0..self.geometry.height {
             for x in 0..self.geometry.width {
