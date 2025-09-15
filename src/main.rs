@@ -69,8 +69,8 @@ fn geometry_parse(geometry: &str) -> Geometry {
     if geometry.len() != 2 {
         panic!("invalid geometry");
     }
-    let width: usize = geometry[0].parse().ok().expect("invalid geometry");
-    let height: usize = geometry[1].parse().ok().expect("invalid geometry");
+    let width: usize = geometry[0].parse().expect("invalid geometry");
+    let height: usize = geometry[1].parse().expect("invalid geometry");
     Geometry { width, height }
 }
 
@@ -93,9 +93,7 @@ fn rendering_parse(rendering: &str, bg: Rgb<u8>, fg: [Rgb<u8>; 2]) -> Box<dyn ma
 }
 
 fn vertical_bias_parse(vertical_bias: &str) -> f64 {
-    let d = f64::from_str(vertical_bias)
-        .ok()
-        .expect("vertical_bias is not a floating number");
+    let d = f64::from_str(vertical_bias).expect("vertical_bias is not a floating number");
 
     if d >= 1.0 {
         panic!("vertical_bias is too large");
@@ -110,8 +108,8 @@ fn origin_parse(origin: &str) -> Origin {
     if origin.len() != 2 {
         panic!("invalid geometry");
     }
-    let x: f64 = origin[0].parse().ok().expect("invalid origin");
-    let y: f64 = origin[1].parse().ok().expect("invalid origin");
+    let x: f64 = origin[0].parse().expect("invalid origin");
+    let y: f64 = origin[1].parse().expect("invalid origin");
     Origin { x, y }
 }
 
