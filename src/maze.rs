@@ -749,12 +749,6 @@ impl Maze {
     }
     fn draw_gif<T: ?Sized + Rendering>(&self, renderer: &T) -> Frame<'_> {
         let g = image_geometry(renderer, &self.geometry);
-        let mut frame = Frame::default();
-
-        frame.width = g.width as u16;
-        frame.height = g.height as u16;
-        frame.palette = None;
-        frame.transparent = None;
 
         let mut buffer: Vec<u8> = Vec::with_capacity(g.width * g.height);
         for _ in 0..(g.width * g.height) {
@@ -767,8 +761,15 @@ impl Maze {
                 renderer.draw_cell_gif(self, &g, &mut buffer, &c, self.cell_kind(&c));
             }
         }
-        frame.buffer = Cow::Owned(buffer);
-        frame
+
+        Frame {
+            width: g.width as u16,
+            height: g.height as u16,
+            palette: None,
+            transparent: None,
+            buffer: Cow::Owned(buffer),
+            ..Default::default()
+        }
     }
 
     fn clear_path(&mut self) {
