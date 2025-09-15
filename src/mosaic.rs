@@ -1,6 +1,6 @@
 use crate::maze::{CellKind, Coord, Maze, Rendering};
 use image::{Rgb, RgbImage};
-use rand::distributions::{Distribution, Uniform};
+use rand::distr::{Distribution, Uniform};
 
 const TILE_SIZE: u32 = 5;
 
@@ -71,8 +71,9 @@ fn draw_tile(img: &mut RgbImage, x: u32, y: u32, tile: &[Rgb<u8>; 3]) {
 }
 
 fn draw_tile_rand(img: &mut RgbImage, x: u32, y: u32, tiles: &[[Rgb<u8>; 3]; 5]) {
-    let between: Uniform<u8> = Uniform::new(0, tiles.len() as u8);
-    let mut rng = rand::thread_rng();
+    let between: Uniform<u8> =
+        Uniform::new(0, tiles.len() as u8).expect("cannot create uniform random distribution");
+    let mut rng = rand::rng();
     let idx = between.sample(&mut rng) as usize;
     draw_tile(img, x, y, &tiles[idx]);
 }

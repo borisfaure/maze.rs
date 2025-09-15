@@ -2,7 +2,7 @@ use gif::{DisposalMethod, Encoder, ExtensionData, Frame, Repeat};
 use image::RgbImage;
 use std::path;
 
-use rand::random;
+use rand::{random, Rng};
 use std::borrow::Cow;
 use std::fs::File;
 
@@ -52,7 +52,7 @@ fn add_walls(vwalls: &mut Vec<Wall>, hwalls: &mut Vec<Wall>, new_walls: Vec<Coor
 }
 
 fn pop_random_wall(vwalls: &mut Vec<Wall>, hwalls: &mut Vec<Wall>, vertical_bias: f64) -> Wall {
-    let r: usize = random::<usize>();
+    let r: usize = rand::rng().random_range(0..usize::MAX);
     match (vwalls.len(), hwalls.len()) {
         (0, len) => {
             let pos = r % len;
@@ -524,7 +524,7 @@ impl<'a> Backtracker<'a> {
         if vec.is_empty() {
             None
         } else {
-            let r: usize = random::<usize>();
+            let r: usize = rand::rng().random_range(0..usize::MAX);
             let len = vec.len();
             Some(vec.swap_remove(r % len))
         }

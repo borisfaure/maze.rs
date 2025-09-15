@@ -1,7 +1,7 @@
 use crate::maze::{CellKind, Coord, Maze, Rendering};
 use crate::plain::draw_cell_plain;
 use image::{Rgb, RgbImage};
-use rand::distributions::{Distribution, Uniform};
+use rand::distr::{Distribution, Uniform};
 
 const TILE_SIZE: u32 = 7;
 
@@ -12,8 +12,9 @@ pub struct RendererInvaders {
 
 impl RendererInvaders {
     fn draw_invader(&self, img: &mut RgbImage, c: &Coord) {
-        let mut rng = rand::thread_rng();
-        let invader_range: Uniform<u16> = Uniform::new(0, std::u16::MAX);
+        let mut rng = rand::rng();
+        let invader_range: Uniform<u16> =
+            Uniform::new(0, std::u16::MAX).expect("cannot create uniform random distribution");
         let invader_nbr = invader_range.sample(&mut rng);
 
         /* draw background */

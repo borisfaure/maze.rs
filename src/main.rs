@@ -1,10 +1,8 @@
+extern crate color_scaling;
 extern crate docopt;
 extern crate gif;
 extern crate image;
 extern crate rand;
-#[macro_use]
-extern crate debug_macros;
-extern crate color_scaling;
 extern crate read_color;
 
 mod invaders;
@@ -73,10 +71,7 @@ fn geometry_parse(geometry: &str) -> Geometry {
     }
     let width: usize = geometry[0].parse().ok().expect("invalid geometry");
     let height: usize = geometry[1].parse().ok().expect("invalid geometry");
-    Geometry {
-        width,
-        height,
-    }
+    Geometry { width, height }
 }
 
 fn rendering_parse(rendering: &str, bg: Rgb<u8>, fg: [Rgb<u8>; 2]) -> Box<dyn maze::Rendering> {
