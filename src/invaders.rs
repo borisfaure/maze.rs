@@ -1,9 +1,7 @@
 use crate::maze::{CellKind, Coord, Maze, Rendering};
 use crate::plain::draw_cell_plain;
 use image::{Rgb, RgbImage};
-use rand;
 use rand::distributions::{Distribution, Uniform};
-use std;
 
 const TILE_SIZE: u32 = 7;
 

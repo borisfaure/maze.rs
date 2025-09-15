@@ -99,17 +99,17 @@ struct Kruskal<'a> {
 impl<'a> Kruskal<'a> {
     fn init(maze: &'a mut Maze) -> Kruskal<'a> {
         /* Create list of walls */
-        let nb_walls = ((maze.geometry.width + 1) / 2) * ((maze.geometry.height + 1) / 2) / 2;
+        let nb_walls = maze.geometry.width.div_ceil(2) * maze.geometry.height.div_ceil(2) / 2;
         let mut vwalls: Vec<Coord> = Vec::with_capacity(nb_walls);
         let mut hwalls: Vec<Coord> = Vec::with_capacity(nb_walls);
         for y in 0..maze.geometry.height {
             for x in 0..maze.geometry.width {
                 match ((x & 1), (y & 1)) {
                     (0, 1) => {
-                        vwalls.push(Coord { x: x, y: y });
+                        vwalls.push(Coord { x, y });
                     }
                     (1, 0) => {
-                        hwalls.push(Coord { x: x, y: y });
+                        hwalls.push(Coord { x, y });
                     }
                     (_, _) => {}
                 }
@@ -121,10 +121,10 @@ impl<'a> Kruskal<'a> {
         let origin = maze.origin.clone();
         maze.set_path(&origin, f);
         Kruskal {
-            maze: maze,
-            vwalls: vwalls,
-            hwalls: hwalls,
-            f: f,
+            maze,
+            vwalls,
+            hwalls,
+            f,
         }
     }
 
@@ -146,7 +146,7 @@ impl<'a> Kruskal<'a> {
         stack.push(c.clone());
         loop {
             self.maze.grid[c.y * self.maze.geometry.width + c.x] = CellKind::PathKind(f);
-            match self.maze.walk(&c, &is_visited) {
+            match self.maze.walk(&c, is_visited) {
                 Some((next, _)) => {
                     self.maze.grid[next.y * self.maze.geometry.width + next.x] =
                         CellKind::PathKind(f);
@@ -173,7 +173,7 @@ impl<'a> Kruskal<'a> {
         let is_visited = |m: &Maze, c: &Coord| m.is_visited(c);
         self.maze.set_path(&c, 0_f64);
         loop {
-            match self.maze.walk(&c, &is_visited) {
+            match self.maze.walk(&c, is_visited) {
                 Some((next, direction)) => {
                     self.maze.set_path(&next, 0_f64);
                     f += 1_f64;
@@ -205,7 +205,7 @@ impl<'a> Algorithm<'a> for Kruskal<'a> {
             /* mark unvisited as walls */
             for y in 0..self.maze.geometry.height {
                 for x in 0..self.maze.geometry.width {
-                    let c = Coord { x: x, y: y };
+                    let c = Coord { x, y };
                     match self.maze.cell_kind(&c) {
                         CellKind::Undefined => {
                             self.maze.set_wall(&c);
@@ -313,9 +313,9 @@ impl<'a> Prim<'a> {
         let start = maze.origin();
         maze.set_path(&start, 0.0_f64);
         let mut p = Prim {
-            maze: maze,
-            vwalls: vwalls,
-            hwalls: hwalls,
+            maze,
+            vwalls,
+            hwalls,
         };
         let new_walls = p.get_undefined_cells_around(&start);
         p.set_walls(&new_walls);
@@ -325,7 +325,7 @@ impl<'a> Prim<'a> {
 
     fn set_walls(&mut self, walls: &Vec<Coord>) {
         for w in walls {
-            self.maze.set_wall(&w as &Wall);
+            self.maze.set_wall(w as &Wall);
         }
     }
 
@@ -338,7 +338,7 @@ impl<'a> Prim<'a> {
         ];
         let mut v: Vec<Coord> = Vec::new();
         for d in dirs {
-            let o = self.maze.get_coord_next(&c, &d);
+            let o = self.maze.get_coord_next(c, &d);
             if let Some(c) = o {
                 if let CellKind::Undefined = self.maze.cell_kind(&c) {
                     v.push(c);
@@ -354,14 +354,14 @@ impl<'a> Algorithm<'a> for Prim<'a> {
         if self.vwalls.is_empty() && self.hwalls.is_empty() {
             for y in (0..self.maze.geometry.height).filter(|&v| v % 2 == 1) {
                 for x in (0..self.maze.geometry.width).filter(|&v| v % 2 == 1) {
-                    if let CellKind::Undefined = self.maze.cell_kind(&Coord { x: x, y: y }) {
+                    if let CellKind::Undefined = self.maze.cell_kind(&Coord { x, y }) {
                         self.maze.grid[y * self.maze.geometry.width + x] = CellKind::WallKind;
                     }
                 }
             }
             for y in 0..self.maze.geometry.height {
                 for x in 0..self.maze.geometry.width {
-                    if let CellKind::PathKind(f) = self.maze.cell_kind(&Coord { x: x, y: y }) {
+                    if let CellKind::PathKind(f) = self.maze.cell_kind(&Coord { x, y }) {
                         self.maze.grid[y * self.maze.geometry.width + x] =
                             CellKind::PathKind(f / self.maze.len);
                     }
@@ -477,9 +477,9 @@ impl<'a> Backtracker<'a> {
 
         maze.len = 0_f64;
         Backtracker {
-            maze: maze,
-            c: c,
-            stack: stack,
+            maze,
+            c,
+            stack,
             f: 0_f64,
             to_finish: false,
         }
@@ -521,7 +521,7 @@ impl<'a> Backtracker<'a> {
                 }
             }
         }
-        if vec.len() == 0 {
+        if vec.is_empty() {
             None
         } else {
             let r: usize = random::<usize>();
@@ -537,7 +537,7 @@ impl<'a> Algorithm<'a> for Backtracker<'a> {
             /* mark unvisited as walls */
             for y in 0..self.maze.geometry.height {
                 for x in 0..self.maze.geometry.width {
-                    let c = Coord { x: x, y: y };
+                    let c = Coord { x, y };
                     match self.maze.cell_kind(&c) {
                         CellKind::Undefined => {
                             self.maze.set_wall(&c);
@@ -612,7 +612,7 @@ impl Maze {
         let mut m = Maze {
             geometry: g.clone(),
             grid: Vec::new(),
-            vertical_bias: vertical_bias,
+            vertical_bias,
             origin: Coord { x: 0, y: 0 },
             len: 0_f64,
             end: Coord {
@@ -660,7 +660,7 @@ impl Maze {
     }
 
     fn set_wall(&mut self, c: &Coord) {
-        if let CellKind::WallKind = self.cell_kind(&c) {
+        if let CellKind::WallKind = self.cell_kind(c) {
             return;
         }
         self.grid[c.y * self.geometry.width + c.x] = CellKind::WallKind;
@@ -741,8 +741,8 @@ impl Maze {
 
         for y in 0..self.geometry.height {
             for x in 0..self.geometry.width {
-                let c = Coord { x: x, y: y };
-                renderer.draw_cell(&self, &mut img, &c, self.cell_kind(&c));
+                let c = Coord { x, y };
+                renderer.draw_cell(self, &mut img, &c, self.cell_kind(&c));
             }
         }
         img
@@ -763,8 +763,8 @@ impl Maze {
 
         for y in 0..self.geometry.height {
             for x in 0..self.geometry.width {
-                let c = Coord { x: x, y: y };
-                renderer.draw_cell_gif(&self, &g, &mut buffer, &c, self.cell_kind(&c));
+                let c = Coord { x, y };
+                renderer.draw_cell_gif(self, &g, &mut buffer, &c, self.cell_kind(&c));
             }
         }
         frame.buffer = Cow::Owned(buffer);
@@ -774,7 +774,7 @@ impl Maze {
     fn clear_path(&mut self) {
         for y in 0..self.geometry.height {
             for x in 0..self.geometry.width {
-                if let CellKind::PathKind(_) = self.cell_kind(&Coord { x: x, y: y }) {
+                if let CellKind::PathKind(_) = self.cell_kind(&Coord { x, y }) {
                     self.grid[y * self.geometry.width + x] = CellKind::PathKind(-1_f64);
                 }
             }
@@ -823,7 +823,7 @@ impl Maze {
         let is_visited = |m: &Maze, c: &Coord| m.is_visited(c);
         self.set_path(&c, 0_f64);
         loop {
-            match self.walk(&c, &is_visited) {
+            match self.walk(&c, is_visited) {
                 Some((next, direction)) => {
                     self.set_path(&next, 0_f64);
                     if (next.x, next.y) == (self.end.x, self.end.y) {
@@ -852,9 +852,9 @@ impl Maze {
             let mut d = 0_f64;
             c = v.0.clone();
             loop {
-                match self.walk(&c, &is_visited) {
+                match self.walk(&c, is_visited) {
                     Some((next, _)) => {
-                        d = d + 1_f64;
+                        d += 1_f64;
                         if d > len {
                             len = d;
                         }
@@ -879,7 +879,7 @@ impl Maze {
         len = len.log10();
         for y in 0..self.geometry.height {
             for x in 0..self.geometry.width {
-                if let CellKind::PathKind(f) = self.cell_kind(&Coord { x: x, y: y }) {
+                if let CellKind::PathKind(f) = self.cell_kind(&Coord { x, y }) {
                     if f > 0_f64 {
                         self.grid[y * self.geometry.width + x] =
                             CellKind::PathKind(f.log10() / len);
@@ -978,7 +978,7 @@ pub fn generate_image<T: ?Sized + Rendering>(
                         continue;
                     }
                     dbg!("{} frames generated in gif", nb_iterations);
-                    draw_animated_frame(&m, encoder.as_mut().unwrap());
+                    draw_animated_frame(m, encoder.as_mut().unwrap());
                 }
                 None => {
                     break;

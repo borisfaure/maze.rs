@@ -32,7 +32,7 @@ use image::Rgb;
 
 /* CLI {{{ */
 
-const USAGE: &'static str = "
+const USAGE: &str = "
 Maze background generator.
 
 Usage: maze [options] FILE
@@ -74,8 +74,8 @@ fn geometry_parse(geometry: &str) -> Geometry {
     let width: usize = geometry[0].parse().ok().expect("invalid geometry");
     let height: usize = geometry[1].parse().ok().expect("invalid geometry");
     Geometry {
-        width: width,
-        height: height,
+        width,
+        height,
     }
 }
 
@@ -117,7 +117,7 @@ fn origin_parse(origin: &str) -> Origin {
     }
     let x: f64 = origin[0].parse().ok().expect("invalid origin");
     let y: f64 = origin[1].parse().ok().expect("invalid origin");
-    Origin { x: x, y: y }
+    Origin { x, y }
 }
 
 fn color_parse(color: &str) -> Rgb<u8> {
@@ -170,7 +170,7 @@ fn colors_parse(bg: &str, fg: &str) -> (Rgb<u8>, [Rgb<u8>; 2]) {
         if vec_str.len() > 1 {
             color_parse(vec_str[1])
         } else {
-            fg1.clone() as Rgb<u8>
+            fg1 as Rgb<u8>
         }
     };
 
@@ -183,27 +183,27 @@ fn main() {
         .and_then(|dopt| dopt.version(Some(version)).parse())
         .unwrap_or_else(|e| e.exit());
     let geometry = args.get_str("--geometry");
-    let geometry = geometry_parse(&geometry);
+    let geometry = geometry_parse(geometry);
 
     let (bg, fg) = colors_parse(args.get_str("--background"), args.get_str("--foreground"));
 
     let rendering = args.get_str("--rendering");
-    let rendering = rendering_parse(&rendering, bg, fg);
+    let rendering = rendering_parse(rendering, bg, fg);
 
     let path = args.get_str("FILE");
     let path = path::Path::new(path);
 
     let vertical_bias = args.get_str("--vertical-bias");
-    let vertical_bias = vertical_bias_parse(&vertical_bias);
+    let vertical_bias = vertical_bias_parse(vertical_bias);
 
     let origin = args.get_str("--origin");
-    let origin = origin_parse(&origin);
+    let origin = origin_parse(origin);
 
     let gradient = args.get_str("--gradient");
-    let gradient = gradient_parse(&gradient);
+    let gradient = gradient_parse(gradient);
 
     let algorithm = args.get_str("--algorithm");
-    let algorithm = algorithm_parse(&algorithm);
+    let algorithm = algorithm_parse(algorithm);
 
     let animation = args.get_bool("--animation");
 

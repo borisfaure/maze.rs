@@ -62,8 +62,7 @@ impl Rendering for RendererPlain {
             CellKind::PathKind(f) => {
                 if self.path_color_start != self.path_color_end
                     && !f.is_nan()
-                    && f < 1f64
-                    && f >= 0f64
+                    && (0f64..1f64).contains(&f)
                 {
                     panic!("not implemented");
                 } else {
