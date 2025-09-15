@@ -931,6 +931,7 @@ fn image_geometry<T: ?Sized + Rendering>(renderer: &T, g: &super::Geometry) -> s
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn generate_image<T: ?Sized + Rendering>(
     path: &path::Path,
     g: super::Geometry,
