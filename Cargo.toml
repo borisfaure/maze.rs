@@ -10,5 +10,5 @@ docopt = "1.1"
 rand = { version = "0.9", features = ["std", "std_rng"] }
 color_scaling = "0.1"
 image = "0.25"
-gif = "0.13"
+gif = "0.14"
 read_color = "1"
