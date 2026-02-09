@@ -2,7 +2,7 @@ use gif::{DisposalMethod, Encoder, ExtensionData, Frame, Repeat};
 use image::RgbImage;
 use std::path;
 
-use rand::{random, Rng};
+use rand::{random, RngExt};
 use std::borrow::Cow;
 use std::fs::File;
 
