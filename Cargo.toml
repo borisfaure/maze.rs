@@ -7,7 +7,7 @@ edition = '2021'
 
 [dependencies]
 docopt = "1.1"
-rand = { version = "0.9", features = ["std", "std_rng"] }
+rand = { version = "0.10", features = ["std", "std_rng"] }
 color_scaling = "0.1"
 image = "0.25"
 gif = "0.14"
